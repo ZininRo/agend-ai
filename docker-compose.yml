@@ -1,0 +1,34 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: agendai
+      POSTGRES_USER: ${DB_USER:-agendai}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-agendai}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  app:
+    build: ./backend
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_URL: jdbc:postgresql://db:5432/agendai
+      DB_USER: ${DB_USER:-agendai}
+      DB_PASSWORD: ${DB_PASSWORD:-agendai}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      STT_API_KEY: ${STT_API_KEY:-}
+    ports:
+      - "8080:8080"
+
+volumes:
+  pgdata:

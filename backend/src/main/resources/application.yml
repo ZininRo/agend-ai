@@ -1,0 +1,60 @@
+spring:
+  application:
+    name: agend-ai
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/agendai}
+    username: ${DB_USER:agendai}
+    password: ${DB_PASSWORD:agendai}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: true
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 6MB
+  jackson:
+    property-naming-strategy: SNAKE_CASE
+    serialization:
+      write-dates-as-timestamps: false
+
+app:
+  timezone: Europe/Moscow
+  context:
+    max-messages: 10
+  meeting:
+    default-duration-min: 60
+  pending:
+    ttl-min: 30
+
+# Используются с фазы 2/3 (секреты только из окружения)
+stt:
+  provider: ${STT_PROVIDER:}
+  api-key: ${STT_API_KEY:}
+  timeout-sec: 10
+  min-confidence: 0.5
+llm:
+  provider: ${LLM_PROVIDER:}
+  model: ${LLM_MODEL:}
+  api-key: ${LLM_API_KEY:}
+  timeout-sec: 15
+
+limits:
+  max-audio-sec: 30
+  max-audio-bytes: 5242880
+  max-text-chars: 1000
+  rate:
+    voice-per-min: 10
+    message-per-min: 30
+
+cors:
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:3000}
+
+debug:
+  save-audio: false
