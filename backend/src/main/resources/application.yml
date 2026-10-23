@@ -42,9 +42,11 @@ stt:
 llm:
   provider: ${LLM_PROVIDER:yandexgpt}
   model: ${LLM_MODEL:yandexgpt/latest}
-  api-key: ${LLM_API_KEY:test}
+  api-key: ${LLM_API_KEY:}
   base-url: ${LLM_BASE_URL:https://ai.api.cloud.yandex.net}
-  timeout-sec: 15
+  folder-id: ${LLM_FOLDER_ID:}
+  timeout-sec: ${LLM_TIMEOUT_SEC:15}
+  max-tokens: ${LLM_MAX_TOKENS:1000}
 
 limits:
   max-audio-sec: 30

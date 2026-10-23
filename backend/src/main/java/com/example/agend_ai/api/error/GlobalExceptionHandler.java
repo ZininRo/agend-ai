@@ -25,62 +25,68 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    @ExceptionHandler(AppException.class)
-    public ResponseEntity<ApiError> handleApp(AppException ex) {
-        return respond(ex.getCode(), HttpStatusCode.valueOf(ex.getCode().httpStatus()), ex.getRetryAfterSec());
-    }
+  @ExceptionHandler(AppException.class)
+  public ResponseEntity<ApiError> handleApp(AppException ex) {
+    return respond(
+        ex.getCode(), HttpStatusCode.valueOf(ex.getCode().httpStatus()), ex.getRetryAfterSec());
+  }
 
-    @ExceptionHandler({
-            MethodArgumentNotValidException.class,
-            HttpMessageNotReadableException.class,
-            MissingServletRequestParameterException.class,
-            MethodArgumentTypeMismatchException.class,
-            ConstraintViolationException.class,
-            HttpMediaTypeNotSupportedException.class
-    })
-    public ResponseEntity<ApiError> handleBadRequest(Exception ex) {
-        log.debug("Bad request: {}", ex.getClass().getSimpleName());
-        return respond(ErrorCode.REQUEST_INVALID, HttpStatus.BAD_REQUEST, null);
-    }
+  @ExceptionHandler({
+    MethodArgumentNotValidException.class,
+    HttpMessageNotReadableException.class,
+    MissingServletRequestParameterException.class,
+    MethodArgumentTypeMismatchException.class,
+    ConstraintViolationException.class,
+    HttpMediaTypeNotSupportedException.class
+  })
+  public ResponseEntity<ApiError> handleBadRequest(Exception ex) {
+    log.debug("Bad request: {}", ex.getClass().getSimpleName());
+    return respond(ErrorCode.REQUEST_INVALID, HttpStatus.BAD_REQUEST, null);
+  }
 
-    @ExceptionHandler(MissingServletRequestPartException.class)
-    public ResponseEntity<ApiError> handleMissingPart(MissingServletRequestPartException ex) {
-        ErrorCode code = "audio".equals(ex.getRequestPartName()) ? ErrorCode.AUDIO_MISSING : ErrorCode.REQUEST_INVALID;
-        return respond(code, HttpStatusCode.valueOf(code.httpStatus()), null);
-    }
+  @ExceptionHandler(MissingServletRequestPartException.class)
+  public ResponseEntity<ApiError> handleMissingPart(MissingServletRequestPartException ex) {
+    ErrorCode code =
+        "audio".equals(ex.getRequestPartName())
+            ? ErrorCode.AUDIO_MISSING
+            : ErrorCode.REQUEST_INVALID;
+    return respond(code, HttpStatusCode.valueOf(code.httpStatus()), null);
+  }
 
-    @ExceptionHandler(MaxUploadSizeExceededException.class)
-    public ResponseEntity<ApiError> handleTooLarge(MaxUploadSizeExceededException ex) {
-        return respond(ErrorCode.AUDIO_TOO_LARGE, HttpStatus.PAYLOAD_TOO_LARGE, null);
-    }
+  @ExceptionHandler(MaxUploadSizeExceededException.class)
+  public ResponseEntity<ApiError> handleTooLarge(MaxUploadSizeExceededException ex) {
+    return respond(ErrorCode.AUDIO_TOO_LARGE, HttpStatus.PAYLOAD_TOO_LARGE, null);
+  }
 
-    @ExceptionHandler(NoResourceFoundException.class)
-    public ResponseEntity<ApiError> handleNotFound(NoResourceFoundException ex) {
-        return respond(ErrorCode.REQUEST_INVALID, HttpStatus.NOT_FOUND, null);
-    }
+  @ExceptionHandler(NoResourceFoundException.class)
+  public ResponseEntity<ApiError> handleNotFound(NoResourceFoundException ex) {
+    return respond(ErrorCode.REQUEST_INVALID, HttpStatus.NOT_FOUND, null);
+  }
 
-    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
-    public ResponseEntity<ApiError> handleMethodNotAllowed(HttpRequestMethodNotSupportedException ex) {
-        return respond(ErrorCode.REQUEST_INVALID, HttpStatus.METHOD_NOT_ALLOWED, null);
-    }
+  @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+  public ResponseEntity<ApiError> handleMethodNotAllowed(
+      HttpRequestMethodNotSupportedException ex) {
+    return respond(ErrorCode.REQUEST_INVALID, HttpStatus.METHOD_NOT_ALLOWED, null);
+  }
 
-    @ExceptionHandler({DataAccessException.class, TransactionException.class})
-    public ResponseEntity<ApiError> handleStorage(Exception ex) {
-        log.error("Storage failure", ex);
-        return respond(ErrorCode.STORAGE_UNAVAILABLE, HttpStatus.SERVICE_UNAVAILABLE, null);
-    }
+  @ExceptionHandler({DataAccessException.class, TransactionException.class})
+  public ResponseEntity<ApiError> handleStorage(Exception ex) {
+    log.error("Storage failure: {}", ex.getClass().getSimpleName());
+    return respond(ErrorCode.STORAGE_UNAVAILABLE, HttpStatus.SERVICE_UNAVAILABLE, null);
+  }
 
-    @ExceptionHandler(Exception.class)
-    public ResponseEntity<ApiError> handleOther(Exception ex) {
-        log.error("Unhandled exception", ex);
-        return respond(ErrorCode.INTERNAL_ERROR, HttpStatus.INTERNAL_SERVER_ERROR, null);
-    }
+  @ExceptionHandler(Exception.class)
+  public ResponseEntity<ApiError> handleOther(Exception ex) {
+    log.error("Unhandled exception: {}", ex.getClass().getSimpleName());
+    return respond(ErrorCode.INTERNAL_ERROR, HttpStatus.INTERNAL_SERVER_ERROR, null);
+  }
 
-    private ResponseEntity<ApiError> respond(ErrorCode code, HttpStatusCode status, Integer retryAfterSec) {
-        ResponseEntity.BodyBuilder builder = ResponseEntity.status(status);
-        if (retryAfterSec != null) {
-            builder.header(HttpHeaders.RETRY_AFTER, String.valueOf(retryAfterSec));
-        }
-        return builder.body(ApiError.of(code, retryAfterSec, MDC.get(RequestIdFilter.MDC_KEY)));
+  private ResponseEntity<ApiError> respond(
+      ErrorCode code, HttpStatusCode status, Integer retryAfterSec) {
+    ResponseEntity.BodyBuilder builder = ResponseEntity.status(status);
+    if (retryAfterSec != null) {
+      builder.header(HttpHeaders.RETRY_AFTER, String.valueOf(retryAfterSec));
     }
+    return builder.body(ApiError.of(code, retryAfterSec, MDC.get(RequestIdFilter.MDC_KEY)));
+  }
 }
