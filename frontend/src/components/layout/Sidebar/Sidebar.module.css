@@ -1,0 +1,93 @@
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  /* overflow: hidden;  */
+  background: var(--color-sidebar);
+  box-shadow: inset -1px 0 0 var(--color-border);
+  /* Ширину задаёт сам сайдбар: колонка грида в AppLayout подстраивается под неё (auto) */
+  width: var(--sidebar-width);
+  transition: width 0.25s ease;
+}
+
+/* Свёрнутое меню — узкая колонка из иконок */
+.collapsed {
+  width: var(--sidebar-width-collapsed, 96px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar {
+    transition: none;
+  }
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 40px 18px 0 18px;
+}
+
+.brand {
+  flex: 1;
+  font-size: 30px;
+  line-height: 30px;
+  white-space: nowrap;
+}
+
+.collapse {
+  display: flex;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.collapse:hover {
+  color: var(--color-text);
+}
+
+/* Список прокручивается, если раскрыты все разделы и он не помещается по высоте */
+.nav {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-surface) transparent;
+  font-size: 20px;
+  margin-top: 20px;
+  padding: 0 12px 0 8px;
+}
+
+/* Без этого строки сжимаются, когда содержимое не влезает, вместо прокрутки */
+.nav > * {
+  flex-shrink: 0;
+}
+
+.footer {
+  margin-top: auto;
+  padding: 15px 15px 15px;
+}
+
+/* Логотип и кнопка «развернуть» остаются в одной строке по центру узкой колонки */
+.collapsed .header {
+  justify-content: center;
+  gap: 8px;
+  padding: 40px 0 0;
+}
+
+.collapsed .collapse {
+  transform: rotate(180deg);
+}
+
+.collapsed .nav {
+  padding: 0 10px;
+}
+
+.collapsed .footer {
+  padding: 0 15px 15px;
+}

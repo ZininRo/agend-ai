@@ -1,0 +1,41 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding-inline: 20%;
+}
+
+.scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* Единая колонка: сообщения, подсказки и поле ввода по центру и одной ширины */
+.column {
+  width: min(100% - 48px, var(--chat-width));
+  margin-inline: auto;
+}
+
+.footer {
+  padding-bottom: clamp(56px, 12.2vh, 132px);
+  padding-top: 10px;
+}
+
+.footerContent {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.error {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin: 8px 0 0;
+  padding-left: 24px;
+  color: var(--color-error);
+  font-size: 15px;
+  line-height: 20px;
+}

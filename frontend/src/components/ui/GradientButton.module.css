@@ -1,0 +1,44 @@
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--gradient-accent);
+  color: #fff;
+  cursor: pointer;
+  transition: filter 0.15s, transform 0.15s;
+}
+
+.button:hover {
+  filter: brightness(1.1);
+}
+
+.button:active {
+  transform: scale(0.96);
+}
+
+.button:disabled {
+  opacity: 0.6;
+  cursor: progress;
+  filter: none;
+  transform: none;
+}
+
+.button:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+.sm {
+  width: 52px;
+  height: 52px;
+}
+
+/* 234px — размер из макета 1920×1080; в невысоких окнах уменьшается вместе с высотой */
+.lg {
+  width: clamp(120px, 21.7vh, 234px);
+  height: clamp(120px, 21.7vh, 234px);
+}

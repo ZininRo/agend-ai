@@ -1,0 +1,7 @@
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 21px;
+  /* В макете диалог начинается примерно на четверти высоты экрана */
+  padding: clamp(48px, 24vh, 260px) 0 32px;
+}

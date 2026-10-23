@@ -1,0 +1,14 @@
+.layout {
+  display: grid;
+  /* Первая колонка — по ширине сайдбара (он сам задаёт свою ширину), вторая — всё остальное */
+  grid-template-columns: auto minmax(0, 1fr);
+  /* Строка ровно в высоту окна: длинное меню не растягивает грид, а прокручивается внутри сайдбара */
+  grid-template-rows: minmax(0, 1fr);
+  height: 100dvh;
+}
+
+.main {
+  min-height: 0;
+  overflow: hidden;
+  background: var(--color-bg);
+}
