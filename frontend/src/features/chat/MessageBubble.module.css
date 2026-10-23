@@ -1,0 +1,39 @@
+.bubble {
+  max-width: 80%;
+  padding: 9px 14px;
+  border-radius: 9px;
+  font-size: 16px;
+  line-height: 24px;
+  overflow-wrap: anywhere;
+}
+
+/* align-self работает, потому что родитель (MessageList) — flex-колонка */
+.user {
+  align-self: flex-end;
+  background: var(--color-bubble-user);
+}
+
+.pending {
+  animation: blink 1.2s ease-in-out infinite;
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pending {
+    animation: none;
+    opacity: 0.7;
+  }
+}
+
+.assistant {
+  align-self: flex-start;
+  /* В макете ответ ассистента отстоит от вопроса заметно дальше,
+     чем следующий вопрос от ответа: базовый gap списка + это поле. */
+  margin-bottom: 15px;
+  background: var(--color-bubble-assistant);
+}

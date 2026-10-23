@@ -1,0 +1,31 @@
+.iconSm {
+  width: 24px;
+  height: 24px;
+}
+
+/* 100px — размер из макета 1920×1080; в невысоких окнах уменьшается вместе с высотой */
+.iconLg {
+  width: clamp(52px, 9.3vh, 100px);
+  height: clamp(52px, 9.3vh, 100px);
+}
+
+/* Пока идёт запись, вокруг кнопки расходятся кольца */
+.recording {
+  animation: pulse 1.6s ease-out infinite;
+}
+
+@keyframes pulse {
+  from {
+    box-shadow: 0 0 0 0 rgba(168, 110, 255, 0.55);
+  }
+  to {
+    box-shadow: 0 0 0 22px rgba(168, 110, 255, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .recording {
+    animation: none;
+    box-shadow: 0 0 0 5px rgba(168, 110, 255, 0.45);
+  }
+}

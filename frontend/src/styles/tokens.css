@@ -1,0 +1,29 @@
+/* Дизайн-токены: все цвета, шрифт и ключевые размеры макета в одном месте.
+   Компоненты берут значения только отсюда, поэтому смена темы = правка этого файла. */
+:root {
+  --font-sans: 'Inter Variable', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+
+  /* Поверхности */
+  --color-bg: #1a181d;
+  --color-sidebar: #161418;
+  --color-surface: #29272c; /* поле ввода, переключатель месяца, аватар */
+  --color-border: rgba(255, 255, 255, 0.05);
+
+  /* Текст */
+  --color-text: #ffffff;
+  --color-text-muted: #77747d; /* подзаголовок, иконка «свернуть» */
+  --color-text-subtle: #a09da6; /* подпись «Попробуйте, например:» */
+
+  /* Акцент и сообщения */
+  --color-accent: #7b2cff;
+  --color-error: #ff8a8a;
+  --color-bubble-user: #4f0f9c;
+  --color-bubble-assistant: #3b1768;
+  --color-chip-border: rgba(168, 110, 255, 0.25);
+  --gradient-accent: linear-gradient(115deg, #8100ff 15%, #c9a8ff 100%);
+
+  /* Размеры */
+  --sidebar-width: 350px;
+  --sidebar-width-collapsed: 96px; /* узкое меню из одних иконок */
+  --chat-width: 984px; /* колонка чата: сообщения, подсказки и поле ввода */
+}
