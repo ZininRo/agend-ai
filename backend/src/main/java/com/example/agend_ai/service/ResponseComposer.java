@@ -1,88 +1,212 @@
 package com.example.agend_ai.service;
 
 import com.example.agend_ai.entity.Item;
+import com.example.agend_ai.entity.enums.ItemStatus;
 import com.example.agend_ai.entity.enums.ItemType;
 import java.time.*;
 import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
+import java.time.temporal.TemporalAdjusters;
 import java.util.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+/** Тексты ответов строятся только из шаблонов и реальных данных БД (разд. 11.4 ТЗ). */
 @Component
 @RequiredArgsConstructor
 public class ResponseComposer {
   private final Clock clock;
   private static final Locale RU = Locale.forLanguageTag("ru");
   private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm");
+  private static final DateTimeFormatter DAY_MONTH = DateTimeFormatter.ofPattern("d MMMM", RU);
+  private static final DateTimeFormatter WEEKDAY = DateTimeFormatter.ofPattern("EEEE", RU);
+  private static final String[] WEEKDAY_GENITIVE = {
+          "понедельника", "вторника", "среды", "четверга", "пятницы", "субботы", "воскресенья"
+  };
+  /** Срок «на день» хранится как 23:59 локального времени. */
+  private static final LocalTime END_OF_DAY = LocalTime.of(23, 59);
 
+  private LocalDate today(ZoneId zone) {
+    return clock.instant().atZone(zone).toLocalDate();
+  }
+
+  /** «сегодня», «завтра», «послезавтра», иначе «30 октября, пятница». */
   public String date(LocalDate date, ZoneId zone) {
-    LocalDate today = clock.instant().atZone(zone).toLocalDate();
-    if (date.equals(today)) return "сегодня";
-    if (date.equals(today.plusDays(1))) return "завтра";
-    if (date.equals(today.plusDays(2))) return "послезавтра";
-    return date.format(DateTimeFormatter.ofPattern("d MMMM, EEEE", RU));
+    String word = nearDay(date, zone);
+    return word != null ? word : DAY_MONTH.format(date) + ", " + WEEKDAY.format(date);
+  }
+
+  private String nearDay(LocalDate date, ZoneId zone) {
+    long delta = ChronoUnit.DAYS.between(today(zone), date);
+    if (delta == 0) return "сегодня";
+    if (delta == 1) return "завтра";
+    if (delta == 2) return "послезавтра";
+    return null;
+  }
+
+  /** «завтра, 24 октября» или «30 октября, пятница» (без повтора даты). */
+  private String fullDay(LocalDate date, ZoneId zone) {
+    String word = nearDay(date, zone);
+    return word != null ? word + ", " + DAY_MONTH.format(date) : date(date, zone);
+  }
+
+  /** «завтра» или «30 октября» — для напоминаний. */
+  private String dayWord(LocalDate date, ZoneId zone) {
+    String word = nearDay(date, zone);
+    return word != null ? word : DAY_MONTH.format(date);
+  }
+
+  private String deadline(LocalDate date, ZoneId zone) {
+    String word = nearDay(date, zone);
+    String dm = DAY_MONTH.format(date);
+    if (word == null) return "до " + WEEKDAY_GENITIVE[date.getDayOfWeek().getValue() - 1] + ", " + dm;
+    return switch (word) {
+      case "сегодня" -> "до конца дня, " + dm;
+      case "завтра" -> "до завтра, " + dm;
+      default -> "до послезавтра, " + dm;
+    };
+  }
+
+  private static String lowerFirst(String s) {
+    if (s == null || s.length() < 2 || Character.isUpperCase(s.charAt(1))) return s;
+    return Character.toLowerCase(s.charAt(0)) + s.substring(1);
+  }
+
+  private static String meetingName(String title) {
+    String lower = title.toLowerCase(RU);
+    return lower.startsWith("с ") || lower.startsWith("со ") ? "встреча " + title : lowerFirst(title);
   }
 
   public String created(Item item, ZoneId zone) {
     ZonedDateTime at =
-        (item.getType() == ItemType.TASK ? item.getDueAt() : item.getStartAt()).atZone(zone);
-    String day = date(at.toLocalDate(), zone), time = at.format(TIME);
+            (item.getType() == ItemType.TASK ? item.getDueAt() : item.getStartAt()).atZone(zone);
+    LocalDate day = at.toLocalDate();
+    String time = at.format(TIME);
     return switch (item.getType()) {
-      case REMINDER -> "Готово: напомню " + day + " в " + time + " " + item.getTitle() + ".";
+      case REMINDER ->
+              "Готово: напомню "
+                      + dayWord(day, zone)
+                      + " в "
+                      + time
+                      + " "
+                      + lowerFirst(item.getTitle())
+                      + ".";
       case MEETING ->
-          "Готово: "
-              + (item.getTitle().toLowerCase(RU).startsWith("встреча")
-                  ? item.getTitle()
-                  : "встреча " + item.getTitle())
-              + " — "
-              + day
-              + ", "
-              + at.format(DateTimeFormatter.ofPattern("d MMMM", RU))
-              + ", в "
-              + time
-              + ".";
+              "Готово: "
+                      + meetingName(item.getTitle())
+                      + " — "
+                      + fullDay(day, zone)
+                      + ", в "
+                      + time
+                      + ".";
       case TASK ->
-          "Готово: задача «"
-              + item.getTitle()
-              + "» — до "
-              + at.format(DateTimeFormatter.ofPattern("d MMMM", RU))
-              + ", "
-              + time
-              + ".";
+              "Готово: задача «"
+                      + item.getTitle()
+                      + "» — "
+                      + deadline(day, zone)
+                      + (at.toLocalTime().equals(END_OF_DAY) ? "" : ", в " + time)
+                      + ".";
     };
   }
 
   public String list(List<Item> items, DateResolver.Period period, ZoneId zone, String type) {
+    LocalDate today = today(zone);
     if (items.isEmpty()) {
-      String noun =
-          "task".equals(type)
-              ? "задач"
-              : "meeting".equals(type)
-                  ? "встреч"
-                  : "reminder".equals(type) ? "напоминаний" : "записей";
-      String when =
-          period.first().equals(period.last())
-              ? date(period.first(), zone)
-              : period.first() + " — " + period.last();
-      return "На " + when + " " + noun + " нет.";
+      return "На " + emptyPeriod(period, today, zone) + " " + noun(type, 0) + " нет.";
     }
-    StringBuilder result =
-        new StringBuilder("Записи за период " + period.first() + " — " + period.last() + ":");
-    LocalDate previous = null;
+    String header = header(period, today, zone) + " " + items.size() + " " + noun(type, items.size()) + ":";
+    boolean oneDay = period.first().equals(period.last());
+    if (oneDay) {
+      List<String> parts = new ArrayList<>();
+      for (int i = 0; i < items.size(); i++) parts.add((i + 1) + ") " + line(items.get(i), zone));
+      return header + " " + String.join("; ", parts) + ".";
+    }
+    Map<LocalDate, List<String>> byDay = new LinkedHashMap<>();
     for (Item item : items) {
-      ZonedDateTime at =
-          (item.getType() == ItemType.TASK ? item.getDueAt() : item.getStartAt()).atZone(zone);
-      if (!at.toLocalDate().equals(previous)) {
-        previous = at.toLocalDate();
-        result.append("\n").append(date(previous, zone)).append(":");
-      }
-      result.append("\n").append(at.format(TIME)).append(" — ").append(item.getTitle());
+      LocalDate day =
+              (item.getType() == ItemType.TASK ? item.getDueAt() : item.getStartAt())
+                      .atZone(zone)
+                      .toLocalDate();
+      byDay.computeIfAbsent(day, k -> new ArrayList<>()).add(line(item, zone));
     }
+    StringBuilder result = new StringBuilder(header);
+    byDay.forEach(
+            (day, lines) ->
+                    result.append("\n").append(date(day, zone)).append(": ").append(String.join("; ", lines)).append("."));
     return result.toString();
+  }
+
+  private String line(Item item, ZoneId zone) {
+    ZonedDateTime at =
+            (item.getType() == ItemType.TASK ? item.getDueAt() : item.getStartAt()).atZone(zone);
+    String text =
+            item.getType() == ItemType.TASK && at.toLocalTime().equals(END_OF_DAY)
+                    ? item.getTitle() + " (задача)"
+                    : at.format(TIME) + " — " + item.getTitle();
+    return item.getStatus() == ItemStatus.DONE ? text + " (выполнено)" : text;
+  }
+
+  private String header(DateResolver.Period p, LocalDate today, ZoneId zone) {
+    if (p.first().equals(p.last())) {
+      long delta = ChronoUnit.DAYS.between(today, p.first());
+      if (delta == -1) return "Вчера";
+      String word = nearDay(p.first(), zone);
+      return word != null ? Character.toUpperCase(word.charAt(0)) + word.substring(1) : "На " + DAY_MONTH.format(p.first());
+    }
+    if (isThisWeek(p, today)) return "На этой неделе";
+    if (isNextWeek(p, today)) return "На следующей неделе";
+    return "С " + DAY_MONTH.format(p.first()) + " по " + DAY_MONTH.format(p.last());
+  }
+
+  private String emptyPeriod(DateResolver.Period p, LocalDate today, ZoneId zone) {
+    if (p.first().equals(p.last())) {
+      long delta = ChronoUnit.DAYS.between(today, p.first());
+      if (delta == -1) return "вчера";
+      return dayWord(p.first(), zone);
+    }
+    if (isThisWeek(p, today)) return "эту неделю";
+    if (isNextWeek(p, today)) return "следующую неделю";
+    return "период с " + DAY_MONTH.format(p.first()) + " по " + DAY_MONTH.format(p.last());
+  }
+
+  private static boolean isThisWeek(DateResolver.Period p, LocalDate today) {
+    return p.first().equals(today)
+            && p.last().equals(today.with(TemporalAdjusters.nextOrSame(DayOfWeek.SUNDAY)));
+  }
+
+  private static boolean isNextWeek(DateResolver.Period p, LocalDate today) {
+    LocalDate monday = today.with(TemporalAdjusters.next(DayOfWeek.MONDAY));
+    return p.first().equals(monday) && p.last().equals(monday.plusDays(6));
+  }
+
+  private static String noun(String type, int n) {
+    int n100 = n % 100, n10 = n % 10;
+    int form = (n100 >= 11 && n100 <= 14) ? 2 : n10 == 1 ? 0 : (n10 >= 2 && n10 <= 4) ? 1 : 2;
+    String[] forms =
+            "task".equals(type)
+                    ? new String[] {"задача", "задачи", "задач"}
+                    : "meeting".equals(type)
+                    ? new String[] {"встреча", "встречи", "встреч"}
+                    : "reminder".equals(type)
+                    ? new String[] {"напоминание", "напоминания", "напоминаний"}
+                    : new String[] {"запись", "записи", "записей"};
+    return forms[form];
   }
 
   public String composeRefused() {
     return "Этого я пока не умею. Могу создавать задачи, напоминания и встречи, показывать списки и"
-               + " искать записи.";
+            + " искать записи.";
+  }
+
+  /** Интент распознан, но выполняется в следующих версиях (поиск, статус, перенос). */
+  public String composeNotYet() {
+    return "Эту команду я пока не умею выполнять. Сейчас могу создавать задачи, напоминания и"
+            + " встречи и показывать списки записей.";
+  }
+
+  /** Ответы на уточняющие вопросы появятся позже: просим повторить запрос целиком. */
+  public String composeAnswersNotSupported() {
+    return "Продолжать прошлый вопрос я пока не умею. Повторите запрос целиком, например:"
+            + " «Поставь встречу с Иваном завтра в 15:00».";
   }
 }
