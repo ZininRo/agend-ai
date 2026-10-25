@@ -55,30 +55,13 @@ class YandexGptClientTest {
   }
 
   @Test
-  void badRequestFallsBackToJsonObjectAndRemembersIt() throws Exception {
-    wire.stubFor(
-        post(urlEqualTo(PATH))
-            .atPriority(1)
-            .withRequestBody(matchingJsonPath("$.jsonSchema"))
-            .willReturn(aResponse().withStatus(400).withBody("{\"error\":\"schema is not supported\"}")));
-    wire.stubFor(post(urlEqualTo(PATH)).atPriority(5).willReturn(okJson(OK)));
-    var client = client("k", "f", 5);
-
-    assertThat(client.generateStructuredJson("sys", "data")).isEqualTo("{\"intent\":\"unknown\"}");
-    wire.verify(2, postRequestedFor(urlEqualTo(PATH)));
-    wire.verify(1, postRequestedFor(urlEqualTo(PATH)).withRequestBody(matchingJsonPath("$.jsonObject", equalTo("true"))));
-
-    client.generateStructuredJson("sys", "data"); // режим запомнен: сразу jsonObject
-    wire.verify(3, postRequestedFor(urlEqualTo(PATH)));
-  }
-
-  @Test
-  void badRequestEverywhereEndsAsLlmUnavailable() throws Exception {
+  void badRequestIsNotRetriedAndMapsToLlmUnavailable() throws Exception {
     wire.stubFor(post(urlEqualTo(PATH)).willReturn(aResponse().withStatus(400).withBody("{}")));
+
     assertThatThrownBy(() -> client("k", "f", 5).generateStructuredJson("sys", "data"))
         .isInstanceOfSatisfying(
             AppException.class, e -> assertThat(e.getCode()).isEqualTo(ErrorCode.LLM_UNAVAILABLE));
-    wire.verify(3, postRequestedFor(urlEqualTo(PATH))); // jsonSchema → jsonObject → обычный
+    wire.verify(1, postRequestedFor(urlEqualTo(PATH)));
   }
 
   @Test

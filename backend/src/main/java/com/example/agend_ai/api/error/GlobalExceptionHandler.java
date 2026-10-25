@@ -71,13 +71,16 @@ public class GlobalExceptionHandler {
 
   @ExceptionHandler({DataAccessException.class, TransactionException.class})
   public ResponseEntity<ApiError> handleStorage(Exception ex) {
-    log.error("Storage failure: {}", ex.getClass().getSimpleName());
+    Throwable root = ex;
+    while (root.getCause() != null) root = root.getCause();
+    log.error("Storage failure: {} (причина: {})", ex.getClass().getSimpleName(), root.getClass().getName());
     return respond(ErrorCode.STORAGE_UNAVAILABLE, HttpStatus.SERVICE_UNAVAILABLE, null);
   }
 
   @ExceptionHandler(Exception.class)
   public ResponseEntity<ApiError> handleOther(Exception ex) {
-    log.error("Unhandled exception: {}", ex.getClass().getSimpleName());
+    // Полный стек нужен, чтобы найти причину; пользовательский текст сюда не попадает.
+    log.error("Unhandled exception", ex);
     return respond(ErrorCode.INTERNAL_ERROR, HttpStatus.INTERNAL_SERVER_ERROR, null);
   }
 

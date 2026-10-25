@@ -33,17 +33,19 @@ app:
   pending:
     ttl-min: 30
 
-# Используются с фазы 2/3 (секреты только из окружения)
+# Распознавание речи — фаза 3 (ключи только из окружения/.env)
 stt:
   provider: ${STT_PROVIDER:}
   api-key: ${STT_API_KEY:}
   timeout-sec: 10
   min-confidence: 0.5
+
+# YandexGPT. Ключ и каталог берутся из .env: LLM_API_KEY и LLM_FOLDER_ID.
 llm:
   provider: ${LLM_PROVIDER:yandexgpt}
   model: ${LLM_MODEL:yandexgpt/latest}
   api-key: ${LLM_API_KEY:}
-  base-url: ${LLM_BASE_URL:https://ai.api.cloud.yandex.net}
+  base-url: ${LLM_BASE_URL:https://llm.api.cloud.yandex.net}
   folder-id: ${LLM_FOLDER_ID:}
   timeout-sec: ${LLM_TIMEOUT_SEC:15}
   max-tokens: ${LLM_MAX_TOKENS:1000}

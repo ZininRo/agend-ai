@@ -325,7 +325,7 @@ class MessageApiTest extends DatabaseTestSupport {
   }
 
   @ParameterizedTest
-  @ValueSource(ints = {401, 403, 429, 500, 503})
+  @ValueSource(ints = {400, 401, 403, 429, 500, 503})
   void upstreamFailureDoesNotRetryOrPersist(int http) throws Exception {
     wire.stubFor(
         com.github.tomakehurst.wiremock.client.WireMock.post(anyUrl())

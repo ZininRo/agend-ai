@@ -21,7 +21,7 @@ public class ResponseComposer {
   private static final DateTimeFormatter DAY_MONTH = DateTimeFormatter.ofPattern("d MMMM", RU);
   private static final DateTimeFormatter WEEKDAY = DateTimeFormatter.ofPattern("EEEE", RU);
   private static final String[] WEEKDAY_GENITIVE = {
-          "понедельника", "вторника", "среды", "четверга", "пятницы", "субботы", "воскресенья"
+    "понедельника", "вторника", "среды", "четверга", "пятницы", "субботы", "воскресенья"
   };
   /** Срок «на день» хранится как 23:59 локального времени. */
   private static final LocalTime END_OF_DAY = LocalTime.of(23, 59);
@@ -79,33 +79,33 @@ public class ResponseComposer {
 
   public String created(Item item, ZoneId zone) {
     ZonedDateTime at =
-            (item.getType() == ItemType.TASK ? item.getDueAt() : item.getStartAt()).atZone(zone);
+        (item.getType() == ItemType.TASK ? item.getDueAt() : item.getStartAt()).atZone(zone);
     LocalDate day = at.toLocalDate();
     String time = at.format(TIME);
     return switch (item.getType()) {
       case REMINDER ->
-              "Готово: напомню "
-                      + dayWord(day, zone)
-                      + " в "
-                      + time
-                      + " "
-                      + lowerFirst(item.getTitle())
-                      + ".";
+          "Готово: напомню "
+              + dayWord(day, zone)
+              + " в "
+              + time
+              + " "
+              + lowerFirst(item.getTitle())
+              + ".";
       case MEETING ->
-              "Готово: "
-                      + meetingName(item.getTitle())
-                      + " — "
-                      + fullDay(day, zone)
-                      + ", в "
-                      + time
-                      + ".";
+          "Готово: "
+              + meetingName(item.getTitle())
+              + " — "
+              + fullDay(day, zone)
+              + ", в "
+              + time
+              + ".";
       case TASK ->
-              "Готово: задача «"
-                      + item.getTitle()
-                      + "» — "
-                      + deadline(day, zone)
-                      + (at.toLocalTime().equals(END_OF_DAY) ? "" : ", в " + time)
-                      + ".";
+          "Готово: задача «"
+              + item.getTitle()
+              + "» — "
+              + deadline(day, zone)
+              + (at.toLocalTime().equals(END_OF_DAY) ? "" : ", в " + time)
+              + ".";
     };
   }
 
@@ -124,25 +124,25 @@ public class ResponseComposer {
     Map<LocalDate, List<String>> byDay = new LinkedHashMap<>();
     for (Item item : items) {
       LocalDate day =
-              (item.getType() == ItemType.TASK ? item.getDueAt() : item.getStartAt())
-                      .atZone(zone)
-                      .toLocalDate();
+          (item.getType() == ItemType.TASK ? item.getDueAt() : item.getStartAt())
+              .atZone(zone)
+              .toLocalDate();
       byDay.computeIfAbsent(day, k -> new ArrayList<>()).add(line(item, zone));
     }
     StringBuilder result = new StringBuilder(header);
     byDay.forEach(
-            (day, lines) ->
-                    result.append("\n").append(date(day, zone)).append(": ").append(String.join("; ", lines)).append("."));
+        (day, lines) ->
+            result.append("\n").append(date(day, zone)).append(": ").append(String.join("; ", lines)).append("."));
     return result.toString();
   }
 
   private String line(Item item, ZoneId zone) {
     ZonedDateTime at =
-            (item.getType() == ItemType.TASK ? item.getDueAt() : item.getStartAt()).atZone(zone);
+        (item.getType() == ItemType.TASK ? item.getDueAt() : item.getStartAt()).atZone(zone);
     String text =
-            item.getType() == ItemType.TASK && at.toLocalTime().equals(END_OF_DAY)
-                    ? item.getTitle() + " (задача)"
-                    : at.format(TIME) + " — " + item.getTitle();
+        item.getType() == ItemType.TASK && at.toLocalTime().equals(END_OF_DAY)
+            ? item.getTitle() + " (задача)"
+            : at.format(TIME) + " — " + item.getTitle();
     return item.getStatus() == ItemStatus.DONE ? text + " (выполнено)" : text;
   }
 
@@ -171,7 +171,7 @@ public class ResponseComposer {
 
   private static boolean isThisWeek(DateResolver.Period p, LocalDate today) {
     return p.first().equals(today)
-            && p.last().equals(today.with(TemporalAdjusters.nextOrSame(DayOfWeek.SUNDAY)));
+        && p.last().equals(today.with(TemporalAdjusters.nextOrSame(DayOfWeek.SUNDAY)));
   }
 
   private static boolean isNextWeek(DateResolver.Period p, LocalDate today) {
@@ -183,11 +183,11 @@ public class ResponseComposer {
     int n100 = n % 100, n10 = n % 10;
     int form = (n100 >= 11 && n100 <= 14) ? 2 : n10 == 1 ? 0 : (n10 >= 2 && n10 <= 4) ? 1 : 2;
     String[] forms =
-            "task".equals(type)
-                    ? new String[] {"задача", "задачи", "задач"}
-                    : "meeting".equals(type)
-                    ? new String[] {"встреча", "встречи", "встреч"}
-                    : "reminder".equals(type)
+        "task".equals(type)
+            ? new String[] {"задача", "задачи", "задач"}
+            : "meeting".equals(type)
+                ? new String[] {"встреча", "встречи", "встреч"}
+                : "reminder".equals(type)
                     ? new String[] {"напоминание", "напоминания", "напоминаний"}
                     : new String[] {"запись", "записи", "записей"};
     return forms[form];
@@ -195,18 +195,18 @@ public class ResponseComposer {
 
   public String composeRefused() {
     return "Этого я пока не умею. Могу создавать задачи, напоминания и встречи, показывать списки и"
-            + " искать записи.";
+        + " искать записи.";
   }
 
   /** Интент распознан, но выполняется в следующих версиях (поиск, статус, перенос). */
   public String composeNotYet() {
     return "Эту команду я пока не умею выполнять. Сейчас могу создавать задачи, напоминания и"
-            + " встречи и показывать списки записей.";
+        + " встречи и показывать списки записей.";
   }
 
   /** Ответы на уточняющие вопросы появятся позже: просим повторить запрос целиком. */
   public String composeAnswersNotSupported() {
     return "Продолжать прошлый вопрос я пока не умею. Повторите запрос целиком, например:"
-            + " «Поставь встречу с Иваном завтра в 15:00».";
+        + " «Поставь встречу с Иваном завтра в 15:00».";
   }
 }

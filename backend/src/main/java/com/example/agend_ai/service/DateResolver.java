@@ -15,43 +15,43 @@ public class DateResolver {
   private final Clock clock;
 
   private static final String[] DAYS = {
-          "понедельник", "вторник", "сред", "четверг", "пятниц", "суббот", "воскрес"
+    "понедельник", "вторник", "сред", "четверг", "пятниц", "суббот", "воскрес"
   };
 
   /** Числительные для часов, минут и «через N». Составные (21–59) собираются в {@link #number}. */
   private static final Map<String, Integer> NUMBERS =
-          Map.ofEntries(
-                  Map.entry("ноль", 0),
-                  Map.entry("один", 1),
-                  Map.entry("одна", 1),
-                  Map.entry("одну", 1),
-                  Map.entry("два", 2),
-                  Map.entry("две", 2),
-                  Map.entry("три", 3),
-                  Map.entry("четыре", 4),
-                  Map.entry("пять", 5),
-                  Map.entry("шесть", 6),
-                  Map.entry("семь", 7),
-                  Map.entry("восемь", 8),
-                  Map.entry("девять", 9),
-                  Map.entry("десять", 10),
-                  Map.entry("одиннадцать", 11),
-                  Map.entry("двенадцать", 12),
-                  Map.entry("тринадцать", 13),
-                  Map.entry("четырнадцать", 14),
-                  Map.entry("пятнадцать", 15),
-                  Map.entry("шестнадцать", 16),
-                  Map.entry("семнадцать", 17),
-                  Map.entry("восемнадцать", 18),
-                  Map.entry("девятнадцать", 19),
-                  Map.entry("двадцать", 20),
-                  Map.entry("тридцать", 30),
-                  Map.entry("сорок", 40),
-                  Map.entry("пятьдесят", 50));
+      Map.ofEntries(
+          Map.entry("ноль", 0),
+          Map.entry("один", 1),
+          Map.entry("одна", 1),
+          Map.entry("одну", 1),
+          Map.entry("два", 2),
+          Map.entry("две", 2),
+          Map.entry("три", 3),
+          Map.entry("четыре", 4),
+          Map.entry("пять", 5),
+          Map.entry("шесть", 6),
+          Map.entry("семь", 7),
+          Map.entry("восемь", 8),
+          Map.entry("девять", 9),
+          Map.entry("десять", 10),
+          Map.entry("одиннадцать", 11),
+          Map.entry("двенадцать", 12),
+          Map.entry("тринадцать", 13),
+          Map.entry("четырнадцать", 14),
+          Map.entry("пятнадцать", 15),
+          Map.entry("шестнадцать", 16),
+          Map.entry("семнадцать", 17),
+          Map.entry("восемнадцать", 18),
+          Map.entry("девятнадцать", 19),
+          Map.entry("двадцать", 20),
+          Map.entry("тридцать", 30),
+          Map.entry("сорок", 40),
+          Map.entry("пятьдесят", 50));
 
   private static final String[] MONTH_STEMS = {
-          "январ", "феврал", "март", "апрел", "ма", "июн", "июл", "август", "сентябр", "октябр", "ноябр",
-          "декабр"
+    "январ", "феврал", "март", "апрел", "ма", "июн", "июл", "август", "сентябр", "октябр", "ноябр",
+    "декабр"
   };
 
   private static final Pattern PREPOSITION = Pattern.compile("^(?:на|в|во|до|к|ко)\\s+");
@@ -60,20 +60,20 @@ public class DateResolver {
   private static final Pattern END_OF_WEEK = Pattern.compile("кон(?:ца|цу|ец)(?: этой)? недели");
   private static final Pattern ISO_DATE = Pattern.compile("\\d{4}-\\d{2}-\\d{2}");
   private static final Pattern DOT_DATE =
-          Pattern.compile("(\\d{1,2})\\.(\\d{1,2})(?:\\.(\\d{2}|\\d{4}))?");
+      Pattern.compile("(\\d{1,2})\\.(\\d{1,2})(?:\\.(\\d{2}|\\d{4}))?");
   private static final Pattern DAY_MONTH =
-          Pattern.compile("(\\d{1,2})(?:-?го)? ([а-я]+)(?: (\\d{4}))?(?: года)?");
+      Pattern.compile("(\\d{1,2})(?:-?го)? ([а-я]+)(?: (\\d{4}))?(?: года)?");
   private static final Pattern RELATIVE_DAYS =
-          Pattern.compile("через (?:(\\d{1,4}|[а-я ]+?) )?(день|дня|дней|неделю|недели|недель|месяц)");
+      Pattern.compile("через (?:(\\d{1,4}|[а-я ]+?) )?(день|дня|дней|неделю|недели|недель|месяц)");
   private static final Pattern TIME_DIGITS =
-          Pattern.compile("(\\d{1,2})(?:[:.](\\d{2}))?(?: час(?:а|ов)?)?(?: (утра|дня|вечера|ночи))?");
+      Pattern.compile("(\\d{1,2})(?:[:.](\\d{2}))?(?: час(?:а|ов)?)?(?: (утра|дня|вечера|ночи))?");
 
   public record ResolvedDateTime(
-          Instant startAt,
-          Instant dueAt,
-          boolean needsTimeClarification,
-          boolean needsDateClarification,
-          String reason) {}
+      Instant startAt,
+      Instant dueAt,
+      boolean needsTimeClarification,
+      boolean needsDateClarification,
+      String reason) {}
 
   public record Period(Instant from, Instant to, LocalDate first, LocalDate last) {}
 
@@ -82,10 +82,10 @@ public class DateResolver {
   private static String norm(String s) {
     if (s == null) return "";
     return s.strip()
-            .toLowerCase(Locale.ROOT)
-            .replace('ё', 'е')
-            .replaceAll("\\s+", " ")
-            .replaceAll("[.,!?;]+$", "");
+        .toLowerCase(Locale.ROOT)
+        .replace('ё', 'е')
+        .replaceAll("\\s+", " ")
+        .replaceAll("[.,!?;]+$", "");
   }
 
   private static String withoutPreposition(String d) {
@@ -93,7 +93,7 @@ public class DateResolver {
   }
 
   public ResolvedDateTime resolve(
-          String dateExpr, String timeExpr, ZoneId zone, Instant nowOverride) {
+      String dateExpr, String timeExpr, ZoneId zone, Instant nowOverride) {
     ZonedDateTime now = (nowOverride == null ? clock.instant() : nowOverride).atZone(zone);
     String d = norm(dateExpr), t = norm(timeExpr);
 
@@ -140,7 +140,7 @@ public class DateResolver {
     Instant at = local.atZone(zone).toInstant();
     boolean past = at.isBefore(now.toInstant());
     return new ResolvedDateTime(
-            time == null ? null : at, at, time == null, past, past ? "past" : null);
+        time == null ? null : at, at, time == null, past, past ? "past" : null);
   }
 
   private ResolvedDateTime unresolved(String reason) {
@@ -216,9 +216,9 @@ public class DateResolver {
       if (n == null || n < 1 || n > 3650) return new DatePart(null, "invalid_date");
       String unit = days.group(2);
       LocalDate at =
-              unit.startsWith("дн") || unit.equals("день")
-                      ? today.plusDays(n)
-                      : unit.startsWith("недел") ? today.plusWeeks(n) : today.plusMonths(n);
+          unit.startsWith("дн") || unit.equals("день")
+              ? today.plusDays(n)
+              : unit.startsWith("недел") ? today.plusWeeks(n) : today.plusMonths(n);
       return new DatePart(at, null);
     }
 
@@ -239,7 +239,7 @@ public class DateResolver {
     Matcher dot = DOT_DATE.matcher(d);
     if (dot.matches())
       return calendarDate(
-              Integer.parseInt(dot.group(1)), Integer.parseInt(dot.group(2)), dot.group(3), today);
+          Integer.parseInt(dot.group(1)), Integer.parseInt(dot.group(2)), dot.group(3), today);
 
     Matcher dm = DAY_MONTH.matcher(d);
     if (dm.matches()) {
@@ -250,15 +250,15 @@ public class DateResolver {
     for (int i = 0; i < DAYS.length; i++) {
       // Only a weekday expression, never an arbitrary substring of a sentence.
       Matcher w =
-              Pattern.compile("(?:(этот|эту|эта) |(следующ[а-я]*) )?" + DAYS[i] + "[а-я]*").matcher(d);
+          Pattern.compile("(?:(этот|эту|эта) |(следующ[а-я]*) )?" + DAYS[i] + "[а-я]*").matcher(d);
       if (w.matches()) {
         DayOfWeek target = DayOfWeek.of(i + 1);
         boolean next = w.group(2) != null, thisWeek = w.group(1) != null;
         if (creating && today.getDayOfWeek() == target && !next && !thisWeek)
           return new DatePart(null, "ambiguous_date");
         LocalDate at =
-                today.with(
-                        next ? TemporalAdjusters.next(target) : TemporalAdjusters.nextOrSame(target));
+            today.with(
+                next ? TemporalAdjusters.next(target) : TemporalAdjusters.nextOrSame(target));
         return new DatePart(at, null);
       }
     }
@@ -297,7 +297,7 @@ public class DateResolver {
       if (!m.matches()) return null;
     }
     int h = Integer.parseInt(m.group(1)),
-            min = m.group(2) == null ? 0 : Integer.parseInt(m.group(2));
+        min = m.group(2) == null ? 0 : Integer.parseInt(m.group(2));
     if (h > 23 || min > 59) return null;
     String suffix = m.group(3);
     boolean leadingZero = m.group(1).length() == 2 && m.group(1).startsWith("0");
@@ -315,7 +315,7 @@ public class DateResolver {
     List<String> tokens = new ArrayList<>(Arrays.asList(t.split(" ")));
     String suffix = null;
     if (!tokens.isEmpty()
-            && Set.of("утра", "дня", "вечера", "ночи").contains(tokens.get(tokens.size() - 1)))
+        && Set.of("утра", "дня", "вечера", "ночи").contains(tokens.get(tokens.size() - 1)))
       suffix = tokens.remove(tokens.size() - 1);
     if (tokens.equals(List.of("час"))) tokens = new ArrayList<>(List.of("один"));
     else tokens.removeIf(x -> x.equals("час") || x.equals("часа") || x.equals("часов"));
@@ -350,9 +350,9 @@ public class DateResolver {
       from = first.atStartOfDay(zone).toInstant();
     } else {
       Matcher range =
-              Pattern.compile(
-                              "(?:с )?(\\d{4}-\\d{2}-\\d{2})(?:\\s+(?:по|до)\\s+|/)(\\d{4}-\\d{2}-\\d{2})")
-                      .matcher(s);
+          Pattern.compile(
+                  "(?:с )?(\\d{4}-\\d{2}-\\d{2})(?:\\s+(?:по|до)\\s+|/)(\\d{4}-\\d{2}-\\d{2})")
+              .matcher(s);
       if (range.matches()) {
         try {
           first = LocalDate.parse(range.group(1));
