@@ -32,6 +32,7 @@ services:
       LLM_BASE_URL: ${LLM_BASE_URL:-https://llm.api.cloud.yandex.net}
       LLM_TIMEOUT_SEC: ${LLM_TIMEOUT_SEC:-15}
       LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-1000}
+      LOGGING_LEVEL_COM_EXAMPLE_AGEND_AI: ${LOG_LEVEL:-INFO}
       STT_PROVIDER: ${STT_PROVIDER:-}
       STT_API_KEY: ${STT_API_KEY:-}
     ports:

@@ -35,10 +35,11 @@ app:
 
 # Распознавание речи — фаза 3 (ключи только из окружения/.env)
 stt:
-  provider: ${STT_PROVIDER:}
+  provider: ${STT_PROVIDER:speechkit}
   api-key: ${STT_API_KEY:}
-  timeout-sec: 10
-  min-confidence: 0.5
+  base-url: ${STT_BASE_URL:https://stt.api.cloud.yandex.net}
+  timeout-sec: ${STT_TIMEOUT_SEC:10}
+  min-confidence: ${STT_MIN_CONFIDENCE:0.5}
 
 # YandexGPT. Ключ и каталог берутся из .env: LLM_API_KEY и LLM_FOLDER_ID.
 llm:
