@@ -101,3 +101,5 @@ mysql-data/
 logs/
 log/
 *.log
+
+node_modules/

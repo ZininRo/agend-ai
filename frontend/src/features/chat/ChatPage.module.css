@@ -1,4 +1,5 @@
 .page {
+  position: relative; /* от него отсчитывается положение кнопки озвучивания */
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -28,14 +29,10 @@
   gap: 16px;
 }
 
-.error {
+/* Правый верхний угол страницы */
+.speechToggle {
   position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
-  margin: 8px 0 0;
-  padding-left: 24px;
-  color: var(--color-error);
-  font-size: 15px;
-  line-height: 20px;
+  top: 44px;
+  right: 48px;
+  z-index: 1;
 }

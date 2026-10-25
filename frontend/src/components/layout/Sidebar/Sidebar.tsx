@@ -12,9 +12,10 @@ import { formatMonthLabel } from '../../../features/records/format';
 import type { RecordKind } from '../../../features/records/types';
 import { useMonth } from '../../../features/records/useMonth';
 import { useRecords } from '../../../features/records/useRecords';
-import { MonthSwitcher } from './MonthSwitcher';
+import { MonthPicker } from './MonthPicker';
 import { NavItem } from './NavItem';
 import { RecordsSection } from './RecordsSection';
+import { RecordsStatus } from './RecordStatus';
 import { UserMenu } from './UserMenu';
 import styles from './Sidebar.module.css';
 
@@ -37,8 +38,15 @@ export function Sidebar({ collapsed, onToggleCollapsed }: Props) {
     meeting: false,
     event: false,
   });
-  const { month, prev, next } = useMonth();
-  const records = useRecords(month);
+  const { month, select } = useMonth();
+  const { records, status, error, reload } = useRecords(month);
+
+  // Текст ошибки сервера про «сохранение данных» к чтению не подходит, поэтому для сбоев
+  // самого сервера пишем свой текст; про отсутствие сети — готовый текст из ApiError.
+  const loadError =
+    error && (error.code === 'NETWORK_ERROR' || error.code === 'CLIENT_TIMEOUT')
+      ? error.message
+      : 'Не удалось загрузить записи. Попробуйте ещё раз.';
 
   const toggleKind = (kind: RecordKind) =>
     setOpenKinds((state) => ({ ...state, [kind]: !state[kind] }));
@@ -80,7 +88,8 @@ export function Sidebar({ collapsed, onToggleCollapsed }: Props) {
               onClick={() => setRecordsOpen((open) => !open)}
             />
             <Collapsible open={recordsOpen}>
-              <MonthSwitcher label={formatMonthLabel(month)} onPrev={prev} onNext={next} />
+              <MonthPicker label={formatMonthLabel(month)} value={month} onSelect={select} />
+              {status === 'error' && <RecordsStatus message={loadError} onRetry={reload} />}
               {RECORD_SECTIONS.map((section) => (
                 <RecordsSection
                   key={section.kind}
@@ -89,6 +98,7 @@ export function Sidebar({ collapsed, onToggleCollapsed }: Props) {
                   items={records[section.kind]}
                   expanded={openKinds[section.kind]}
                   onToggle={() => toggleKind(section.kind)}
+                  emptyText={status === 'loading' ? 'Загрузка…' : 'Нет записей'}
                 />
               ))}
             </Collapsible>

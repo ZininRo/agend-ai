@@ -20,7 +20,7 @@
   border: 1px solid var(--color-chip-border);
   border-radius: 999px;
   background: var(--color-bubble-assistant);
-  font-size: 15px;
+  font-size: 14px;
   white-space: nowrap;
   cursor: pointer;
   transition: filter 0.15s;
