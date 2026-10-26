@@ -56,8 +56,8 @@ limits:
   max-audio-bytes: 5242880
   max-text-chars: 1000
   rate:
-    voice-per-min: 10
-    message-per-min: 30
+    voice-per-min: ${VOICE_RATE_PER_MIN:10}
+    message-per-min: ${MESSAGE_RATE_PER_MIN:30}
 
 cors:
   allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:3000}

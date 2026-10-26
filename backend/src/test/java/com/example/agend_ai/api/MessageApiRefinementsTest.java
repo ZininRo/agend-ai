@@ -246,9 +246,9 @@ class MessageApiRefinementsTest extends DatabaseTestSupport {
   }
 
   @Test
-  void honestRefusalsForIntentsThatAreNotReadyYet() throws Exception {
+  void deleteItemIsStillRefused() throws Exception {
     // clarification_answer реализован в Phase 4 и отдельно покрывается Phase4ContextApiTest.
-    // Здесь остаются только интенты, которые действительно ещё не поддерживаются.
+    // delete_item остаётся вне MVP и должен давать честный отказ.
 
     stub(payload("delete_item", Map.of("item_ref", "last")));
     send("Удали встречу")
@@ -256,12 +256,6 @@ class MessageApiRefinementsTest extends DatabaseTestSupport {
         .andExpect(jsonPath("$.intent").value("delete_item"))
         .andExpect(jsonPath("$.reply_text").value("Удаление пока не поддерживается."));
 
-    wire.resetAll();
-    stub(payload("search_items", Map.of("query", "презентация")));
-    send("Найди задачу про презентацию")
-        .andExpect(jsonPath("$.result").value("refused"))
-        .andExpect(jsonPath("$.intent").value("search_items"))
-        .andExpect(jsonPath("$.reply_text").value(org.hamcrest.Matchers.startsWith("Эту команду я пока не умею")));
   }
 
   @Test

@@ -27,6 +27,7 @@ public class IntentDispatcher {
   private final DateResolver dates;
   private final ResponseComposer composer;
   private final ConflictChecker conflicts;
+  private final ItemSearchService search;
   private final com.example.agend_ai.config.AppProperties app;
   private final ZoneResolver zones;
   private final LimitsProperties limits;
@@ -130,6 +131,7 @@ public class IntentDispatcher {
     return switch (intent) {
       case create_item -> { session.setPendingClarification(null); yield create(session, request, payload, zone); }
       case list_items -> { session.setPendingClarification(null); yield list(session, request, payload, zone); }
+      case search_items -> { session.setPendingClarification(null); yield search(session, request, payload, zone); }
       case update_item -> { session.setPendingClarification(null); yield update(session, request, payload, zone); }
       case complete_item -> { session.setPendingClarification(null); yield complete(session, request, payload, zone); }
       case clarification_answer -> clarificationAnswer(session, request, payload, zone);
@@ -441,6 +443,47 @@ public class IntentDispatcher {
           : create(session, request, resumed, zone, false);
     }
 
+    if ("choose_item".equals(kind)) {
+      List<UUID> ids = new ArrayList<>();
+      pending.path("candidate_ids").forEach(n -> {
+        try { ids.add(UUID.fromString(n.asText())); } catch (IllegalArgumentException ignored) { }
+      });
+      Item selected = null;
+      try {
+        String digits = normalized.replaceAll("[^0-9]", "");
+        int number;
+        if (!digits.isEmpty()) number = Integer.parseInt(digits);
+        else if (normalized.matches(".*\\b(первая|первую|первый|первое)\\b.*")) number = 1;
+        else if (normalized.matches(".*\\b(вторая|вторую|второй|второе)\\b.*")) number = 2;
+        else if (normalized.matches(".*\\b(третья|третью|третий|третье)\\b.*")) number = 3;
+        else number = -1;
+        if (number >= 1 && number <= ids.size()) selected = items.findById(ids.get(number - 1)).orElse(null);
+      } catch (NumberFormatException ignored) { }
+      if (selected == null) {
+        for (UUID id : ids) {
+          Item candidate = items.findById(id).orElse(null);
+          if (candidate != null && normalized.contains(candidate.getTitle().toLowerCase(Locale.ROOT).replace('ё', 'е'))) {
+            selected = candidate; break;
+          }
+        }
+      }
+      if (selected == null) return finish(session, request, "clarification", "clarification_answer",
+          "Укажите номер записи из списка.", List.of(), false, payload);
+      String pendingIntent = pending.path("intent").asText();
+      JsonNode resumed = resumePayload(pending, pendingIntent, "selected_item_id", selected.getId().toString());
+      session.setPendingClarification(null);
+      return switch (Intent.valueOf(pendingIntent)) {
+        case search_items -> {
+          session.setLastItem(selected);
+          yield finish(session, request, "info", "search_items", composer.search(List.of(selected), zone), List.of(selected), false, resumed);
+        }
+        case update_item -> update(session, request, resumed, zone);
+        case complete_item -> complete(session, request, resumed, zone);
+        default -> finish(session, request, "refused", "clarification_answer",
+            "Не получилось продолжить уточнение. Повторите команду целиком.", List.of(), false, payload);
+      };
+    }
+
     if ("missing_slot".equals(kind)) {
       String awaiting = pending.path("awaiting").isArray() && !pending.path("awaiting").isEmpty()
           ? pending.path("awaiting").get(0).asText() : "";
@@ -460,6 +503,7 @@ public class IntentDispatcher {
       return switch (original) {
         case create_item -> create(session, request, resumed, zone);
         case list_items -> list(session, request, resumed, zone);
+        case search_items -> search(session, request, resumed, zone);
         case update_item -> update(session, request, resumed, zone);
         default -> finish(session, request, "refused", "clarification_answer",
             "Не получилось продолжить уточнение. Повторите команду целиком.", List.of(), false, payload);
@@ -483,22 +527,69 @@ public class IntentDispatcher {
     return resumed;
   }
 
-  private Item resolveTarget(ChatSession session, JsonNode slots) {
+  private record TargetResolution(Item item, List<Item> candidates, boolean byQuery) {}
+
+  private TargetResolution resolveTarget(ChatSession session, JsonNode slots) {
+    String selected = slot(slots, "selected_item_id");
+    if (selected != null) {
+      try {
+        Item item = items.findById(UUID.fromString(selected)).orElse(null);
+        if (item != null && item.getUser().getId().equals(DefaultUser.ID))
+          return new TargetResolution(item, List.of(), true);
+      } catch (IllegalArgumentException ignored) { }
+      return new TargetResolution(null, List.of(), true);
+    }
     String ref = slot(slots, "item_ref");
     if ("last".equals(ref)) {
       Item item = session.getLastItem();
-      if (item == null || !item.getUser().getId().equals(DefaultUser.ID)) return null;
+      if (item == null || !item.getUser().getId().equals(DefaultUser.ID))
+        return new TargetResolution(null, List.of(), false);
       String requestedType = slot(slots, "item_type");
-      if (requestedType != null && item.getType() != ItemType.valueOf(requestedType.toUpperCase(Locale.ROOT))) return null;
-      return item;
+      if (requestedType != null && item.getType() != ItemType.valueOf(requestedType.toUpperCase(Locale.ROOT)))
+        return new TargetResolution(null, List.of(), false);
+      return new TargetResolution(item, List.of(), false);
     }
     if ("by_query".equals(ref)) {
       String query = slot(slots, "query");
-      if (query == null) return null;
-      var found = items.findByTitleQuery(DefaultUser.ID, query, org.springframework.data.domain.PageRequest.of(0, 2));
-      return found.size() == 1 ? found.get(0) : null;
+      if (query == null) return new TargetResolution(null, List.of(), true);
+      var ranked = search.search(query, 3);
+      var confident = search.confident(ranked);
+      if (confident.isPresent()) return new TargetResolution(confident.get(), List.of(), true);
+      return new TargetResolution(null, ranked.stream().map(ItemSearchService.Candidate::item).toList(), true);
     }
-    return null;
+    return new TargetResolution(null, List.of(), false);
+  }
+
+  private MessageResponse chooseItemClarification(
+      ChatSession session, MessageRequest request, JsonNode payload, List<Item> candidates, ZoneId zone) {
+    Map<String, Object> pending = new LinkedHashMap<>();
+    pending.put("kind", "choose_item");
+    pending.put("intent", payload.path("intent").asText());
+    pending.put("draft", payload.path("slots"));
+    pending.put("awaiting", List.of("item"));
+    pending.put("candidate_ids", candidates.stream().map(Item::getId).toList());
+    pending.put("created_at", clock.instant().toString());
+    session.setPendingClarification(mapper.valueToTree(pending));
+    return finish(session, request, "clarification", payload.path("intent").asText(),
+        composer.chooseItem(candidates, zone), candidates, false, payload);
+  }
+
+  private MessageResponse search(
+      ChatSession session, MessageRequest request, JsonNode payload, ZoneId zone) {
+    String query = slot(payload.path("slots"), "query");
+    if (query == null || query.isBlank())
+      return clarify(session, request, payload, "missing_slot", "query", "Что именно найти?");
+    var ranked = search.search(query, 3);
+    List<Item> found = ranked.stream().map(ItemSearchService.Candidate::item).toList();
+    if (found.isEmpty()) {
+      session.setPendingClarification(null);
+      return finish(session, request, "info", "search_items", composer.search(List.of(), zone), List.of(), false, payload);
+    }
+    if (found.size() > 1 && search.confident(ranked).isEmpty())
+      return chooseItemClarification(session, request, payload, found, zone);
+    session.setPendingClarification(null);
+    session.setLastItem(found.get(0));
+    return finish(session, request, "info", "search_items", composer.search(found, zone), found, false, payload);
   }
 
   private MessageResponse update(
@@ -509,9 +600,14 @@ public class IntentDispatcher {
   private MessageResponse update(
       ChatSession session, MessageRequest request, JsonNode payload, ZoneId zone, boolean allowConflict) {
     JsonNode slots = payload.get("slots");
-    Item item = resolveTarget(session, slots);
-    if (item == null) return clarify(session, request, payload, "choose_item", "item",
-        "О какой записи речь? Назовите её.");
+    TargetResolution target = resolveTarget(session, slots);
+    if (target.item() == null) {
+      if (!target.candidates().isEmpty()) return chooseItemClarification(session, request, payload, target.candidates(), zone);
+      if (target.byQuery()) return finish(session, request, "info", "update_item",
+          "Не нашёл такую запись. Уточните название.", List.of(), false, payload);
+      return clarify(session, request, payload, "choose_item", "item", "О какой записи речь? Назовите её.");
+    }
+    Item item = target.item();
     String newDate = slot(slots, "new_date_expr");
     String newTime = slot(slots, "new_time_expr");
     if (newDate == null && newTime == null)
@@ -551,9 +647,14 @@ public class IntentDispatcher {
 
   private MessageResponse complete(
       ChatSession session, MessageRequest request, JsonNode payload, ZoneId zone) {
-    Item item = resolveTarget(session, payload.get("slots"));
-    if (item == null) return clarify(session, request, payload, "choose_item", "item",
-        "О какой записи речь? Назовите её.");
+    TargetResolution target = resolveTarget(session, payload.get("slots"));
+    if (target.item() == null) {
+      if (!target.candidates().isEmpty()) return chooseItemClarification(session, request, payload, target.candidates(), zone);
+      if (target.byQuery()) return finish(session, request, "info", "complete_item",
+          "Не нашёл такую запись. Уточните название.", List.of(), false, payload);
+      return clarify(session, request, payload, "choose_item", "item", "О какой записи речь? Назовите её.");
+    }
+    Item item = target.item();
     item.setStatus(ItemStatus.DONE);
     items.saveAndFlush(item);
     session.setLastItem(item);

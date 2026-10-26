@@ -14,6 +14,15 @@ public interface MessageRepository extends JpaRepository<Message, UUID> {
           + " 'stt_not_recognized') order by m.createdAt desc, m.role asc")
   List<Message> context(@Param("sessionId") UUID sessionId, Pageable pageable);
 
+  @Query("""
+    select m
+    from Message m
+    left join fetch m.item
+    where m.session.id = :sessionId
+    order by m.createdAt desc, m.role asc, m.id desc
+    """)
+  List<Message> history(@Param("sessionId") UUID sessionId, Pageable pageable);
+
   java.util.Optional<Message> findBySessionIdAndClientMessageId(
       UUID sessionId, UUID clientMessageId);
 }

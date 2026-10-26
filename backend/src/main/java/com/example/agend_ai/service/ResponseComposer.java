@@ -216,6 +216,32 @@ public class ResponseComposer {
         + "). Выбрать другое время или поставить в это же?";
   }
 
+  public String search(List<Item> found, ZoneId zone) {
+    if (found.isEmpty()) return "Не нашёл такую запись. Уточните название.";
+    List<String> parts = new ArrayList<>();
+    for (int i = 0; i < found.size(); i++) {
+      Item item = found.get(i);
+      Instant instant = item.getType() == ItemType.TASK ? item.getDueAt() : item.getStartAt();
+      String when = instant == null ? "без даты" : fullDay(instant.atZone(zone).toLocalDate(), zone)
+          + (item.getType() == ItemType.TASK && instant.atZone(zone).toLocalTime().equals(END_OF_DAY)
+              ? "" : ", в " + instant.atZone(zone).format(TIME));
+      parts.add((i + 1) + ") " + item.getTitle() + " — " + when);
+    }
+    return found.size() == 1 ? "Нашёл: " + parts.get(0).substring(3) + "."
+        : "Нашёл " + found.size() + " записи: " + String.join("; ", parts) + ".";
+  }
+
+  public String chooseItem(List<Item> found, ZoneId zone) {
+    List<String> parts = new ArrayList<>();
+    for (int i = 0; i < found.size(); i++) {
+      Item item = found.get(i);
+      Instant instant = item.getType() == ItemType.TASK ? item.getDueAt() : item.getStartAt();
+      String when = instant == null ? "без даты" : dayWord(instant.atZone(zone).toLocalDate(), zone);
+      parts.add((i + 1) + ") " + item.getTitle() + " — " + when);
+    }
+    return "Нашёл несколько записей: " + String.join("; ", parts) + ". Какая из них?";
+  }
+
   public String composeRefused() {
     return "Этого я пока не умею. Могу создавать задачи, напоминания и встречи, показывать списки и"
         + " искать записи.";
