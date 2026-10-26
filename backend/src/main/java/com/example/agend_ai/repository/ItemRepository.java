@@ -36,4 +36,35 @@ public interface ItemRepository extends JpaRepository<Item, UUID> {
                             @Param("to") Instant to,
                             @Param("types") Collection<ItemType> types,
                             @Param("statuses") Collection<ItemStatus> statuses);
+
+    @Query("""
+            select i from Item i
+            where i.user.id = :userId
+              and i.type = :type
+              and i.status = :status
+              and i.id <> :excludeId
+              and i.startAt < :candidateEnd
+              and (
+                   (i.endAt is not null and i.endAt > :candidateStart)
+                or (i.endAt is null and i.startAt > :defaultWindowStart)
+              )
+            order by i.startAt, i.createdAt
+            """)
+    List<Item> findMeetingConflicts(@Param("userId") UUID userId,
+                                    @Param("candidateStart") Instant candidateStart,
+                                    @Param("candidateEnd") Instant candidateEnd,
+                                    @Param("defaultWindowStart") Instant defaultWindowStart,
+                                    @Param("excludeId") UUID excludeId,
+                                    @Param("status") ItemStatus status,
+                                    @Param("type") ItemType type);
+
+    @Query("""
+            select i from Item i
+            where i.user.id = :userId
+              and lower(i.title) like lower(concat('%', :query, '%'))
+            order by i.updatedAt desc
+            """)
+    List<Item> findByTitleQuery(@Param("userId") UUID userId,
+                                @Param("query") String query,
+                                org.springframework.data.domain.Pageable pageable);
 }

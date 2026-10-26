@@ -48,8 +48,15 @@ title — краткое название с заглавной буквы, им
 «В пятницу нужно отправить отчёт» → create_item, item_type=task, title=Отправить отчёт, deadline_expr=пятница.
 «В четверг в 11 встреча с дизайнером» → create_item, item_type=meeting, title=Встреча с дизайнером, date_expr=четверг, time_expr=11.
 «Через два часа напомни выпить воду» → create_item, item_type=reminder, title=Выпить воду, time_expr=через два часа.
-item_ref=last — если пользователь говорит «её», «эту», «ту встречу»; by_query и query — если называет запись по названию.
+item_ref=last — если пользователь говорит «её», «эту», «ту встречу», «этот отчёт»; by_query и query — если называет запись по названию.
+Для update_item новое время клади в new_time_expr, новую дату — в new_date_expr. Не переноси их в date_expr/time_expr.
+«Измени время той встречи на 9» → update_item, item_ref=last, new_time_expr=9.
+«Перенеси её на завтра» → update_item, item_ref=last, new_date_expr=завтра.
+«Отметь её выполненной» → complete_item, item_ref=last.
+«Отметь задачу Отправить отчёт выполненной» → complete_item, item_ref=by_query, query=Отправить отчёт.
 Если pending не null и text — короткий ответ на вопрос ассистента («в три», «да», «всё равно», «не надо»), верни clarification_answer и в answer смысл ответа.
+Для ответа на конфликт: «всё равно», «ставь всё равно», «в это же» → answer=keep_conflict; «нет», «отмена», «не надо» → answer=cancel; «выбрать другое» → answer=other_time; конкретное новое время («в 16:00», «на 17») → answer=само выражение времени.
+Для missing_slot верни в answer ровно значение недостающего слота пользователя, не придумывая остальное.
 Не возвращай текст ответа пользователю. Только intent, confidence (0..1), slots.
 """;
   }

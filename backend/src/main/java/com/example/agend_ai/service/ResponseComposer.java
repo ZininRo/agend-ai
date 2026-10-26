@@ -193,6 +193,29 @@ public class ResponseComposer {
     return forms[form];
   }
 
+  public String updated(Item item, ZoneId zone) {
+    Instant instant = item.getType() == ItemType.TASK ? item.getDueAt() : item.getStartAt();
+    if (instant == null) return "Обновил запись «" + item.getTitle() + "».";
+    ZonedDateTime at = instant.atZone(zone);
+    if (item.getType() == ItemType.MEETING)
+      return "Перенёс " + meetingName(item.getTitle()) + " на " + at.format(TIME) + " — " + fullDay(at.toLocalDate(), zone) + ".";
+    if (item.getType() == ItemType.REMINDER)
+      return "Перенёс напоминание «" + item.getTitle() + "» на " + dayWord(at.toLocalDate(), zone) + " в " + at.format(TIME) + ".";
+    return "Изменил срок задачи «" + item.getTitle() + "» — " + deadline(at.toLocalDate(), zone)
+        + (at.toLocalTime().equals(END_OF_DAY) ? "" : ", в " + at.format(TIME)) + ".";
+  }
+
+  public String completed(Item item) {
+    return "Отметил выполненной: " + lowerFirst(item.getTitle()) + ".";
+  }
+
+  public String conflict(Item conflict, ZoneId zone) {
+    ZonedDateTime at = conflict.getStartAt().atZone(zone);
+    return "На это время уже запланирована встреча «" + conflict.getTitle() + "» ("
+        + dayWord(at.toLocalDate(), zone) + " в " + at.format(TIME)
+        + "). Выбрать другое время или поставить в это же?";
+  }
+
   public String composeRefused() {
     return "Этого я пока не умею. Могу создавать задачи, напоминания и встречи, показывать списки и"
         + " искать записи.";

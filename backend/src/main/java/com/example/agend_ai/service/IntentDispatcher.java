@@ -26,6 +26,8 @@ public class IntentDispatcher {
   private final PromptBuilder prompts;
   private final DateResolver dates;
   private final ResponseComposer composer;
+  private final ConflictChecker conflicts;
+  private final com.example.agend_ai.config.AppProperties app;
   private final ZoneResolver zones;
   private final LimitsProperties limits;
   private final Clock clock;
@@ -57,6 +59,8 @@ public class IntentDispatcher {
     // Atomic creation + row lock also serializes first requests for an unknown session.
     sessions.ensure(request.sessionId(), DefaultUser.ID);
     ChatSession session = sessions.findByIdForUpdate(request.sessionId()).orElseThrow();
+    if (session.getPendingClarification() != null && pendingExpired(session.getPendingClarification()))
+      session.setPendingClarification(null);
     if (request.clientMessageId() != null) {
       var previous =
           messages.findBySessionIdAndClientMessageId(session.getId(), request.clientMessageId());
@@ -124,8 +128,11 @@ public class IntentDispatcher {
           false,
           payload);
     return switch (intent) {
-      case create_item -> create(session, request, payload, zone);
-      case list_items -> list(session, request, payload, zone);
+      case create_item -> { session.setPendingClarification(null); yield create(session, request, payload, zone); }
+      case list_items -> { session.setPendingClarification(null); yield list(session, request, payload, zone); }
+      case update_item -> { session.setPendingClarification(null); yield update(session, request, payload, zone); }
+      case complete_item -> { session.setPendingClarification(null); yield complete(session, request, payload, zone); }
+      case clarification_answer -> clarificationAnswer(session, request, payload, zone);
       case unknown ->
           finish(
               session,
@@ -143,16 +150,6 @@ public class IntentDispatcher {
               "refused",
               intent.name(),
               "Удаление пока не поддерживается.",
-              List.of(),
-              false,
-              payload);
-      case clarification_answer ->
-          finish(
-              session,
-              request,
-              "refused",
-              intent.name(),
-              composer.composeAnswersNotSupported(),
               List.of(),
               false,
               payload);
@@ -187,6 +184,11 @@ public class IntentDispatcher {
 
   private MessageResponse create(
       ChatSession session, MessageRequest request, JsonNode payload, ZoneId zone) {
+    return create(session, request, payload, zone, false);
+  }
+
+  private MessageResponse create(
+      ChatSession session, MessageRequest request, JsonNode payload, ZoneId zone, boolean allowConflict) {
     JsonNode slots = payload.get("slots");
     String typeText = slot(slots, "item_type"), title = slot(slots, "title");
     if (typeText == null)
@@ -268,6 +270,10 @@ public class IntentDispatcher {
             "end_time",
             "Во сколько закончится встреча? Время должно быть позже начала.");
       item.setEndAt(end.startAt());
+    }
+    if (!allowConflict && type == ItemType.MEETING) {
+      var conflict = conflicts.firstConflict(item, null);
+      if (conflict.isPresent()) return conflictClarification(session, request, payload, conflict.get(), zone);
     }
     items.saveAndFlush(item);
     session.setLastItem(item);
@@ -359,6 +365,202 @@ public class IntentDispatcher {
         payload);
   }
 
+  private boolean pendingExpired(JsonNode pending) {
+    try {
+      Instant created = Instant.parse(pending.path("created_at").asText());
+      return clock.instant().minusSeconds(app.pending().ttlMin() * 60L).isAfter(created);
+    } catch (RuntimeException e) {
+      return true;
+    }
+  }
+
+  private List<String> quickReplies(ChatSession session, String result) {
+    if (!"clarification".equals(result) || session.getPendingClarification() == null) return List.of();
+    return "conflict".equals(session.getPendingClarification().path("kind").asText())
+        ? List.of("Выбрать другое время", "Поставить в это же")
+        : List.of();
+  }
+
+  private MessageResponse conflictClarification(
+      ChatSession session, MessageRequest request, JsonNode payload, Item conflict, ZoneId zone) {
+    Map<String, Object> pending = new LinkedHashMap<>();
+    pending.put("kind", "conflict");
+    pending.put("intent", payload.get("intent").asText());
+    pending.put("draft", payload.get("slots"));
+    pending.put("awaiting", List.of("decision"));
+    pending.put("conflict_item_id", conflict.getId());
+    pending.put("created_at", clock.instant().toString());
+    session.setPendingClarification(mapper.valueToTree(pending));
+    return finish(session, request, "clarification", payload.get("intent").asText(),
+        composer.conflict(conflict, zone), List.of(), false, payload);
+  }
+
+  private MessageResponse clarificationAnswer(
+      ChatSession session, MessageRequest request, JsonNode payload, ZoneId zone) {
+    JsonNode pending = session.getPendingClarification();
+    if (pending == null || pendingExpired(pending)) {
+      session.setPendingClarification(null);
+      return finish(session, request, "refused", "clarification_answer",
+          "Сейчас я не жду уточнения. Повторите команду целиком.", List.of(), false, payload);
+    }
+    String answer = slot(payload.get("slots"), "answer");
+    if (answer == null) return finish(session, request, "clarification", "clarification_answer",
+        "Уточните ответ, пожалуйста.", List.of(), false, payload);
+    String normalized = answer.toLowerCase(Locale.ROOT).replace('ё', 'е').strip();
+    String kind = pending.path("kind").asText();
+
+    if (Set.of("cancel", "no", "нет", "отмена", "не надо").contains(normalized)) {
+      session.setPendingClarification(null);
+      return finish(session, request, "info", "clarification_answer", "Хорошо, не создаю.",
+          List.of(), false, payload);
+    }
+
+    if ("conflict".equals(kind)) {
+      String pendingIntent = pending.path("intent").asText("create_item");
+      if (Set.of("keep_conflict", "yes", "все равно", "ставь все равно", "в это же").contains(normalized)) {
+        JsonNode resumed = resumePayload(pending, pendingIntent, null, null);
+        session.setPendingClarification(null);
+        return "update_item".equals(pendingIntent)
+            ? update(session, request, resumed, zone, true)
+            : create(session, request, resumed, zone, true);
+      }
+      if ("other_time".equals(normalized) || "выбрать другое".equals(normalized)) {
+        var next = pending.deepCopy();
+        ((com.fasterxml.jackson.databind.node.ObjectNode) next).put("kind", "missing_slot");
+        ((com.fasterxml.jackson.databind.node.ObjectNode) next).set("awaiting", mapper.valueToTree(List.of("time")));
+        ((com.fasterxml.jackson.databind.node.ObjectNode) next).put("created_at", clock.instant().toString());
+        session.setPendingClarification(next);
+        return finish(session, request, "clarification", "clarification_answer",
+            "На какое время поставить встречу?", List.of(), false, payload);
+      }
+      String timeSlot = "update_item".equals(pendingIntent) ? "new_time_expr" : "time_expr";
+      JsonNode resumed = resumePayload(pending, pendingIntent, timeSlot, answer);
+      session.setPendingClarification(null);
+      return "update_item".equals(pendingIntent)
+          ? update(session, request, resumed, zone, false)
+          : create(session, request, resumed, zone, false);
+    }
+
+    if ("missing_slot".equals(kind)) {
+      String awaiting = pending.path("awaiting").isArray() && !pending.path("awaiting").isEmpty()
+          ? pending.path("awaiting").get(0).asText() : "";
+      String pendingIntent = pending.path("intent").asText();
+      String slotName = switch (awaiting) {
+        case "time" -> "update_item".equals(pendingIntent) ? "new_time_expr" : "time_expr";
+        case "date" -> "update_item".equals(pendingIntent) ? "new_date_expr" : "date_expr";
+        case "period" -> "period_expr";
+        case "item_type" -> "item_type";
+        case "title" -> "title";
+        case "end_time" -> "end_time_expr";
+        default -> awaiting;
+      };
+      JsonNode resumed = resumePayload(pending, pendingIntent, slotName, answer);
+      session.setPendingClarification(null);
+      Intent original = Intent.valueOf(resumed.path("intent").asText());
+      return switch (original) {
+        case create_item -> create(session, request, resumed, zone);
+        case list_items -> list(session, request, resumed, zone);
+        case update_item -> update(session, request, resumed, zone);
+        default -> finish(session, request, "refused", "clarification_answer",
+            "Не получилось продолжить уточнение. Повторите команду целиком.", List.of(), false, payload);
+      };
+    }
+
+    session.setPendingClarification(null);
+    return finish(session, request, "refused", "clarification_answer",
+        "Не получилось продолжить уточнение. Повторите команду целиком.", List.of(), false, payload);
+  }
+
+  private JsonNode resumePayload(JsonNode pending, String intent, String slotName, String value) {
+    com.fasterxml.jackson.databind.node.ObjectNode resumed = mapper.createObjectNode();
+    resumed.put("intent", intent);
+    resumed.put("confidence", 1.0);
+    com.fasterxml.jackson.databind.node.ObjectNode slots = pending.path("draft").isObject()
+        ? (com.fasterxml.jackson.databind.node.ObjectNode) pending.path("draft").deepCopy()
+        : mapper.createObjectNode();
+    if (slotName != null && value != null) slots.put(slotName, value);
+    resumed.set("slots", slots);
+    return resumed;
+  }
+
+  private Item resolveTarget(ChatSession session, JsonNode slots) {
+    String ref = slot(slots, "item_ref");
+    if ("last".equals(ref)) {
+      Item item = session.getLastItem();
+      if (item == null || !item.getUser().getId().equals(DefaultUser.ID)) return null;
+      String requestedType = slot(slots, "item_type");
+      if (requestedType != null && item.getType() != ItemType.valueOf(requestedType.toUpperCase(Locale.ROOT))) return null;
+      return item;
+    }
+    if ("by_query".equals(ref)) {
+      String query = slot(slots, "query");
+      if (query == null) return null;
+      var found = items.findByTitleQuery(DefaultUser.ID, query, org.springframework.data.domain.PageRequest.of(0, 2));
+      return found.size() == 1 ? found.get(0) : null;
+    }
+    return null;
+  }
+
+  private MessageResponse update(
+      ChatSession session, MessageRequest request, JsonNode payload, ZoneId zone) {
+    return update(session, request, payload, zone, false);
+  }
+
+  private MessageResponse update(
+      ChatSession session, MessageRequest request, JsonNode payload, ZoneId zone, boolean allowConflict) {
+    JsonNode slots = payload.get("slots");
+    Item item = resolveTarget(session, slots);
+    if (item == null) return clarify(session, request, payload, "choose_item", "item",
+        "О какой записи речь? Назовите её.");
+    String newDate = slot(slots, "new_date_expr");
+    String newTime = slot(slots, "new_time_expr");
+    if (newDate == null && newTime == null)
+      return clarify(session, request, payload, "missing_slot", "date", "На какую дату или время перенести запись?");
+
+    Instant current = item.getType() == ItemType.TASK ? item.getDueAt() : item.getStartAt();
+    if (current == null) return clarify(session, request, payload, "missing_slot", "date", "На какую дату перенести запись?");
+    ZonedDateTime old = current.atZone(zone);
+    String dateExpr = newDate != null ? newDate : old.toLocalDate().toString();
+    String timeExpr = newTime != null ? newTime
+        : (item.getType() == ItemType.TASK && old.toLocalTime().equals(LocalTime.of(23, 59)) ? null : old.toLocalTime().toString());
+    var resolved = dates.resolve(dateExpr, timeExpr, zone, null);
+    if (resolved.needsDateClarification() || (item.getType() != ItemType.TASK && resolved.startAt() == null))
+      return clarify(session, request, payload, "missing_slot", resolved.startAt() == null ? "time" : "date",
+          resolved.startAt() == null ? "На какое время перенести запись?" : "Уточните новую дату.");
+
+    Instant oldStart = item.getStartAt(), oldEnd = item.getEndAt(), oldDue = item.getDueAt();
+    if (item.getType() == ItemType.TASK) item.setDueAt(resolved.dueAt());
+    else {
+      Duration duration = item.getEndAt() != null && item.getStartAt() != null
+          ? Duration.between(item.getStartAt(), item.getEndAt()) : null;
+      item.setStartAt(resolved.startAt());
+      if (duration != null) item.setEndAt(resolved.startAt().plus(duration));
+    }
+    if (!allowConflict && item.getType() == ItemType.MEETING) {
+      var conflict = conflicts.firstConflict(item, item.getId());
+      if (conflict.isPresent()) {
+        item.setStartAt(oldStart); item.setEndAt(oldEnd); item.setDueAt(oldDue);
+        return conflictClarification(session, request, payload, conflict.get(), zone);
+      }
+    }
+    items.saveAndFlush(item);
+    session.setLastItem(item);
+    session.setPendingClarification(null);
+    return finish(session, request, "done", "update_item", composer.updated(item, zone), List.of(item), true, payload);
+  }
+
+  private MessageResponse complete(
+      ChatSession session, MessageRequest request, JsonNode payload, ZoneId zone) {
+    Item item = resolveTarget(session, payload.get("slots"));
+    if (item == null) return clarify(session, request, payload, "choose_item", "item",
+        "О какой записи речь? Назовите её.");
+    item.setStatus(ItemStatus.DONE);
+    items.saveAndFlush(item);
+    session.setLastItem(item);
+    session.setPendingClarification(null);
+    return finish(session, request, "done", "complete_item", composer.completed(item), List.of(item), true, payload);
+  }
+
   private MessageResponse finish(
       ChatSession session,
       MessageRequest request,
@@ -404,7 +606,7 @@ public class IntentDispatcher {
             speech,
             found.stream().map(i -> ItemDto.from(i, ZoneId.of(request.timezone()))).toList(),
             changed,
-            List.of());
+            quickReplies(session, result));
     user.setResponseJson(mapper.valueToTree(response));
     sessions.save(session);
     return response;

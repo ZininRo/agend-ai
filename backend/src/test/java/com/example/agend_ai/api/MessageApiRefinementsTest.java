@@ -1,3 +1,4 @@
+
 package com.example.agend_ai.api;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.*;
@@ -246,21 +247,20 @@ class MessageApiRefinementsTest extends DatabaseTestSupport {
 
   @Test
   void honestRefusalsForIntentsThatAreNotReadyYet() throws Exception {
-    stub(payload("clarification_answer", Map.of("answer", "в три")));
-    send("В три")
-        .andExpect(jsonPath("$.result").value("refused"))
-        .andExpect(jsonPath("$.intent").value("clarification_answer"))
-        .andExpect(jsonPath("$.reply_text").value(org.hamcrest.Matchers.startsWith("Продолжать прошлый вопрос")));
+    // clarification_answer реализован в Phase 4 и отдельно покрывается Phase4ContextApiTest.
+    // Здесь остаются только интенты, которые действительно ещё не поддерживаются.
 
-    wire.resetAll();
     stub(payload("delete_item", Map.of("item_ref", "last")));
     send("Удали встречу")
+        .andExpect(jsonPath("$.result").value("refused"))
+        .andExpect(jsonPath("$.intent").value("delete_item"))
         .andExpect(jsonPath("$.reply_text").value("Удаление пока не поддерживается."));
 
     wire.resetAll();
     stub(payload("search_items", Map.of("query", "презентация")));
     send("Найди задачу про презентацию")
         .andExpect(jsonPath("$.result").value("refused"))
+        .andExpect(jsonPath("$.intent").value("search_items"))
         .andExpect(jsonPath("$.reply_text").value(org.hamcrest.Matchers.startsWith("Эту команду я пока не умею")));
   }
 
@@ -287,3 +287,4 @@ class MessageApiRefinementsTest extends DatabaseTestSupport {
     assertThat(data.at("/history/1/role").asText()).isEqualTo("ASSISTANT");
   }
 }
+
