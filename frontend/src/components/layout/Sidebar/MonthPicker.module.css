@@ -1,0 +1,106 @@
+/* Кнопка: название месяца по центру, значок календаря справа */
+.button {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 50px;
+  margin: 4px 0 7px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 16px;
+  cursor: pointer;
+  transition: filter 0.15s;
+}
+
+.button:hover {
+  filter: brightness(1.15);
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+
+.icon {
+  position: absolute;
+  right: 14px;
+  width: 24px;
+  height: 24px;
+}
+
+/* Календарь: справа от меню, на уровне кнопки */
+.panel {
+  position: fixed;
+  z-index: 100;
+  box-sizing: border-box;
+  width: 273px;
+  padding: 16px;
+  border-radius: 8px;
+  background: var(--color-surface);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  font-size: 14px;
+}
+
+.year {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 8px 12px;
+  font-size: 18px;
+}
+
+.arrow {
+  display: flex;
+  padding: 4px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.arrow:hover {
+  background: var(--color-bg);
+}
+
+.months {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px 6px;
+}
+
+.month {
+  height: 36px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 6px;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: 14px;
+  cursor: pointer;
+  transition: filter 0.15s;
+}
+
+.month:hover {
+  filter: brightness(1.4);
+}
+
+/* Сегодняшний месяц отмечен обводкой, выбранный залит акцентом */
+.current {
+  border-color: var(--color-chip-border);
+}
+
+.selected {
+  background: var(--color-bubble-user);
+}
+
+.arrow:focus-visible,
+.month:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}

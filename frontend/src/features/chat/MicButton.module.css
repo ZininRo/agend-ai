@@ -29,3 +29,10 @@
     box-shadow: 0 0 0 5px rgba(168, 110, 255, 0.45);
   }
 }
+
+@media (max-width: 600px) {
+  .iconLg {
+    width: 52px;
+    height: 52px;
+  }
+}

@@ -15,16 +15,18 @@ type Props = {
   items: RecordItem[];
   expanded: boolean;
   onToggle: () => void;
+  /** Что показать, если записей нет: «Нет записей» или «Загрузка…» */
+  emptyText?: string;
 };
 
 /** Выпадающий раздел («Задачи», «Встречи», «События»): заголовок + список записей. */
-export function RecordsSection({ label, icon, items, expanded, onToggle }: Props) {
+export function RecordsSection({ label, icon, items, expanded, onToggle, emptyText = 'Нет записей' }: Props) {
   return (
     <section className={`${styles.section} ${expanded ? styles.open : ''}`}>
       <NavItem icon={icon} label={label} expanded={expanded} onClick={onToggle} />
       <Collapsible open={expanded}>
         <ul className={styles.list}>
-          {items.length === 0 && <li className={`${styles.empty} ${styles.plain}`}>Нет записей</li>}
+          {items.length === 0 && <li className={`${styles.empty} ${styles.plain}`}>{emptyText}</li>}
           {items.map((item) => (
             <RecordRow key={item.id} item={item} />
           ))}

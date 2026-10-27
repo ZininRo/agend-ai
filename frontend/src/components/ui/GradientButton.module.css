@@ -42,3 +42,11 @@
   width: clamp(120px, 21.7vh, 234px);
   height: clamp(120px, 21.7vh, 234px);
 }
+
+/* Телефон: большая кнопка поменьше */
+@media (max-width: 600px) {
+  .lg {
+    width: 120px;
+    height: 120px;
+  }
+}

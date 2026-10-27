@@ -37,3 +37,45 @@
   margin-bottom: 15px;
   background: var(--color-bubble-assistant);
 }
+
+/* Сообщение об ошибке: пузырь + кнопки под ним */
+.group {
+  align-self: flex-start;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 80%;
+  margin-bottom: 15px;
+}
+
+.group .bubble {
+  max-width: 100%;
+}
+
+.group .assistant {
+  margin-bottom: 0;
+}
+
+/* Ошибка от ассистента: красный пузырь со значком */
+.error {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: var(--color-bubble-error);
+  color: var(--color-bubble-error-text);
+}
+
+.errorIcon {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  margin-top: 2px;
+}
+
+/* Телефон: текст сообщений в чате 12px */
+@media (max-width: 600px) {
+  .bubble {
+    font-size: 12px;
+    line-height: 18px;
+  }
+}

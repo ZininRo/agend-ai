@@ -14,6 +14,8 @@
   --color-text-muted: #77747d; /* подзаголовок, иконка «свернуть» */
   --color-text-subtle: #a09da6; /* подпись «Попробуйте, например:» */
 
+  --color-bubble-error: #531214;
+
   /* Акцент и сообщения */
   --color-accent: #7b2cff;
   --color-error: #ff8a8a;

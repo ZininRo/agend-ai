@@ -1,8 +1,48 @@
 .page {
+  position: relative; /* от него отсчитывается положение кнопки озвучивания на широких экранах */
   display: flex;
   flex-direction: column;
   height: 100%;
+}
+
+/* Чат: боковые поля зависят от ширины окна, чтобы на ноутбуке колонка не сжималась до узкой полосы */
+.content {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
   padding-inline: 20%;
+}
+
+@media (max-width: 1499px) {
+  .content {
+    padding-inline: 8%;
+  }
+}
+
+@media (max-width: 1100px) {
+  .content {
+    padding-inline: 0; /* у колонки свои поля по 24px (.column) */
+  }
+}
+
+/* Кнопка озвучивания: на узких экранах отдельная строка справа сверху, чат под ней */
+.topbar {
+  display: flex;
+  flex-shrink: 0;
+  justify-content: flex-end;
+  padding: 16px 24px 0;
+}
+
+/* Широкий экран: кнопка в углу поверх страницы, как в макете, место под неё не занимает */
+@media (min-width: 1500px) {
+  .topbar {
+    position: absolute;
+    top: 44px;
+    right: 48px;
+    z-index: 1;
+    padding: 0;
+  }
 }
 
 .scroll {
@@ -26,16 +66,4 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
-}
-
-.error {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
-  margin: 8px 0 0;
-  padding-left: 24px;
-  color: var(--color-error);
-  font-size: 15px;
-  line-height: 20px;
 }

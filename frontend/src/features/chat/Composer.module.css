@@ -41,3 +41,16 @@
   clip-path: inset(50%);
   white-space: nowrap;
 }
+
+/* Телефон: текст в поле ввода 12px */
+@media (max-width: 600px) {
+  .input {
+    font-size: 12px;
+  }
+
+  /* Меньше отступов, иначе от поля остаётся пара букв */
+  .composer {
+    gap: 8px;
+    padding: 0 12px 0 20px;
+  }
+}

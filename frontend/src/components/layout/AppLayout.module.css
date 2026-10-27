@@ -12,3 +12,27 @@
   overflow: hidden;
   background: var(--color-bg);
 }
+
+.backdrop {
+  display: none;
+}
+
+/* Телефон: слева всегда узкая колонка иконок, развёрнутое меню выезжает поверх чата (см. Sidebar.module.css) */
+@media (max-width: 600px) {
+  .layout {
+    grid-template-columns: var(--sidebar-width-collapsed, 64px) minmax(0, 1fr);
+  }
+
+  /* Развёрнутое меню вынуто из потока грида, поэтому чат ставим во вторую колонку явно */
+  .main {
+    grid-column: 2;
+  }
+
+  .backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    display: block;
+    background: rgba(0, 0, 0, 0.55);
+  }
+}
