@@ -18,7 +18,7 @@ public class VoiceController {
 
   @PostMapping(value = "/api/voice", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
   public VoiceResponse transcribe(
-      @RequestPart("audio") MultipartFile audio,
+      @RequestParam("audio") MultipartFile audio,
       @RequestParam("session_id") UUID sessionId,
       @RequestParam(value = "duration_ms", required = false) Long durationMs,
       HttpServletRequest http) {
