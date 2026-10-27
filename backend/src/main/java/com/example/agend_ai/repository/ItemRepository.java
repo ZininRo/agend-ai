@@ -21,6 +21,7 @@ public interface ItemRepository extends JpaRepository<Item, UUID> {
     @Query("""
             select i from Item i
             where i.user.id = :userId
+              and i.deletedAt is null
               and i.type in :types
               and i.status in :statuses
               and (
@@ -40,6 +41,7 @@ public interface ItemRepository extends JpaRepository<Item, UUID> {
     @Query("""
             select i from Item i
             where i.user.id = :userId
+              and i.deletedAt is null
               and i.type = :type
               and i.status = :status
               and i.id <> :excludeId
@@ -61,6 +63,7 @@ public interface ItemRepository extends JpaRepository<Item, UUID> {
     @Query("""
             select i from Item i
             where i.user.id = :userId
+              and i.deletedAt is null
               and lower(i.title) like lower(concat('%', :query, '%'))
             order by i.updatedAt desc
             """)

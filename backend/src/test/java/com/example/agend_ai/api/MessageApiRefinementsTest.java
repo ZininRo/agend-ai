@@ -221,7 +221,7 @@ class MessageApiRefinementsTest extends DatabaseTestSupport {
         .andExpect(jsonPath("$.result").value("info"))
         .andExpect(
             jsonPath("$.reply_text")
-                .value("Сегодня 2 записи: 1) 10:00 — Позвонить Ивану; 2) 15:00 — Встреча с командой."))
+                .value("Сегодня 1 встреча: 1) 15:00 — Встреча с командой. И 1 напоминание: 1) 10:00 — Позвонить Ивану."))
         .andExpect(jsonPath("$.items.length()").value(2));
   }
 
@@ -246,16 +246,13 @@ class MessageApiRefinementsTest extends DatabaseTestSupport {
   }
 
   @Test
-  void deleteItemIsStillRefused() throws Exception {
-    // clarification_answer реализован в Phase 4 и отдельно покрывается Phase4ContextApiTest.
-    // delete_item остаётся вне MVP и должен давать честный отказ.
-
+  void deleteItemWithoutExistingLastItemAsksWhichItem() throws Exception {
     stub(payload("delete_item", Map.of("item_ref", "last")));
     send("Удали встречу")
-        .andExpect(jsonPath("$.result").value("refused"))
+        .andExpect(jsonPath("$.result").value("clarification"))
         .andExpect(jsonPath("$.intent").value("delete_item"))
-        .andExpect(jsonPath("$.reply_text").value("Удаление пока не поддерживается."));
-
+        .andExpect(jsonPath("$.reply_text").value("Какую запись удалить?"));
+    assertThat(items.count()).isZero();
   }
 
   @Test

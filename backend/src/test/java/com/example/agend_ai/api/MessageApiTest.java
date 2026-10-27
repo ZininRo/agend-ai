@@ -362,9 +362,12 @@ class MessageApiTest extends DatabaseTestSupport {
   }
 
   @Test
-  void deleteIntentRefusesWithoutMutation() throws Exception {
+  void deleteIntentWithoutTargetAsksWhichItemWithoutMutation() throws Exception {
     stub(payload("delete_item", Map.of()));
-    send("Удали встречу", "text").andExpect(jsonPath("$.result").value("refused"));
+    send("Удали встречу", "text")
+        .andExpect(jsonPath("$.result").value("clarification"))
+        .andExpect(jsonPath("$.intent").value("delete_item"))
+        .andExpect(jsonPath("$.reply_text").value("Какую запись удалить?"));
     assertThat(items.count()).isZero();
   }
 

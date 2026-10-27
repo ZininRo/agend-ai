@@ -114,8 +114,9 @@ public class ResponseComposer {
     if (items.isEmpty()) {
       return "На " + emptyPeriod(period, today, zone) + " " + noun(type, 0) + " нет.";
     }
-    String header = header(period, today, zone) + " " + items.size() + " " + noun(type, items.size()) + ":";
     boolean oneDay = period.first().equals(period.last());
+    if (oneDay && type == null) return mixedOneDay(items, period, zone);
+    String header = header(period, today, zone) + " " + items.size() + " " + noun(type, items.size()) + ":";
     if (oneDay) {
       List<String> parts = new ArrayList<>();
       for (int i = 0; i < items.size(); i++) parts.add((i + 1) + ") " + line(items.get(i), zone));
@@ -134,6 +135,33 @@ public class ResponseComposer {
         (day, lines) ->
             result.append("\n").append(date(day, zone)).append(": ").append(String.join("; ", lines)).append("."));
     return result.toString();
+  }
+
+  private String mixedOneDay(List<Item> items, DateResolver.Period period, ZoneId zone) {
+    Map<ItemType, List<Item>> groups = new LinkedHashMap<>();
+    groups.put(ItemType.MEETING, new ArrayList<>());
+    groups.put(ItemType.TASK, new ArrayList<>());
+    groups.put(ItemType.REMINDER, new ArrayList<>());
+    items.forEach(i -> groups.get(i.getType()).add(i));
+    List<String> sections = new ArrayList<>();
+    for (var entry : groups.entrySet()) {
+      List<Item> group = entry.getValue();
+      if (group.isEmpty()) continue;
+      String type = entry.getKey().name().toLowerCase(Locale.ROOT);
+      List<String> lines = new ArrayList<>();
+      for (int i = 0; i < group.size(); i++) {
+        Item item = group.get(i);
+        String line;
+        if (item.getType() == ItemType.TASK) {
+          line = item.getTitle();
+          if (item.getStatus() == ItemStatus.DONE) line += " (выполнено)";
+        } else line = line(item, zone);
+        lines.add((i + 1) + ") " + line);
+      }
+      sections.add(group.size() + " " + noun(type, group.size()) + ": " + String.join("; ", lines));
+    }
+    String prefix = header(period, today(zone), zone);
+    return prefix + " " + String.join(". И ", sections) + ".";
   }
 
   private String line(Item item, ZoneId zone) {
@@ -207,6 +235,26 @@ public class ResponseComposer {
 
   public String completed(Item item) {
     return "Отметил выполненной: " + lowerFirst(item.getTitle()) + ".";
+  }
+
+  public String renamed(Item item) {
+    return "Название " + (item.getType() == ItemType.TASK ? "задачи" : item.getType() == ItemType.MEETING ? "встречи" : "напоминания")
+        + " успешно изменено на «" + item.getTitle() + "».";
+  }
+
+  public String deleteConfirmation(Item item, ZoneId zone) {
+    Instant instant = item.getType() == ItemType.TASK ? item.getDueAt() : item.getStartAt();
+    String when = instant == null ? "" : " на " + dayWord(instant.atZone(zone).toLocalDate(), zone);
+    return "Вы хотите удалить " + (item.getType() == ItemType.TASK ? "задачу" : item.getType() == ItemType.MEETING ? "встречу" : "напоминание")
+        + " «" + item.getTitle() + "»" + when + "?";
+  }
+
+  public String deleted(Item item) {
+    return switch (item.getType()) {
+      case TASK -> "Задача успешно удалена.";
+      case MEETING -> "Встреча успешно удалена.";
+      case REMINDER -> "Напоминание успешно удалено.";
+    };
   }
 
   public String conflict(Item conflict, ZoneId zone) {

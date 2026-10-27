@@ -145,16 +145,7 @@ public class IntentDispatcher {
               List.of(),
               false,
               payload);
-      case delete_item ->
-          finish(
-              session,
-              request,
-              "refused",
-              intent.name(),
-              "Удаление пока не поддерживается.",
-              List.of(),
-              false,
-              payload);
+      case delete_item -> { session.setPendingClarification(null); yield delete(session, request, payload, zone); }
       default ->
           finish(
               session,
@@ -312,6 +303,7 @@ public class IntentDispatcher {
                   + " «2026-10-24 по 2026-10-30» (не более 62 дней).");
     }
     String filter = slot(slots, "type_filter");
+    if (filter != null && !explicitTypeMentioned(request.text(), filter)) filter = null;
     Set<ItemType> types =
         filter == null
             ? EnumSet.allOf(ItemType.class)
@@ -417,6 +409,17 @@ public class IntentDispatcher {
           List.of(), false, payload);
     }
 
+    if ("confirm_delete".equals(kind)) {
+      if (Set.of("yes", "да", "подтверждаю", "удаляй", "удалить").contains(normalized)) {
+        JsonNode resumed = resumePayload(pending, "delete_item", "selected_item_id", pending.path("item_id").asText());
+        session.setPendingClarification(null);
+        return deleteConfirmed(session, request, resumed, zone);
+      }
+      session.setPendingClarification(null);
+      return finish(session, request, "refused", "clarification_answer",
+          "Не понял ваш запрос! Повторите, пожалуйста, или сформулируйте иначе.", List.of(), false, payload);
+    }
+
     if ("conflict".equals(kind)) {
       String pendingIntent = pending.path("intent").asText("create_item");
       if (Set.of("keep_conflict", "yes", "все равно", "ставь все равно", "в это же").contains(normalized)) {
@@ -479,6 +482,7 @@ public class IntentDispatcher {
         }
         case update_item -> update(session, request, resumed, zone);
         case complete_item -> complete(session, request, resumed, zone);
+        case delete_item -> delete(session, request, resumed, zone);
         default -> finish(session, request, "refused", "clarification_answer",
             "Не получилось продолжить уточнение. Повторите команду целиком.", List.of(), false, payload);
       };
@@ -488,6 +492,12 @@ public class IntentDispatcher {
       String awaiting = pending.path("awaiting").isArray() && !pending.path("awaiting").isEmpty()
           ? pending.path("awaiting").get(0).asText() : "";
       String pendingIntent = pending.path("intent").asText();
+      if (("date".equals(awaiting) && (normalized.contains("ту же") || normalized.contains("прежн") || normalized.contains("не меня") || looksLikeTimeOnly(normalized)))
+          || ("time".equals(awaiting) && (normalized.contains("то же") || normalized.contains("прежн") || normalized.contains("не меня")))) {
+        session.setPendingClarification(null);
+        return finish(session, request, "refused", "clarification_answer",
+            "Не понял ваш запрос! Повторите, пожалуйста, или сформулируйте иначе.", List.of(), false, payload);
+      }
       String slotName = switch (awaiting) {
         case "time" -> "update_item".equals(pendingIntent) ? "new_time_expr" : "time_expr";
         case "date" -> "update_item".equals(pendingIntent) ? "new_date_expr" : "date_expr";
@@ -534,7 +544,7 @@ public class IntentDispatcher {
     if (selected != null) {
       try {
         Item item = items.findById(UUID.fromString(selected)).orElse(null);
-        if (item != null && item.getUser().getId().equals(DefaultUser.ID))
+        if (item != null && item.getDeletedAt() == null && item.getUser().getId().equals(DefaultUser.ID))
           return new TargetResolution(item, List.of(), true);
       } catch (IllegalArgumentException ignored) { }
       return new TargetResolution(null, List.of(), true);
@@ -542,7 +552,7 @@ public class IntentDispatcher {
     String ref = slot(slots, "item_ref");
     if ("last".equals(ref)) {
       Item item = session.getLastItem();
-      if (item == null || !item.getUser().getId().equals(DefaultUser.ID))
+      if (item == null || item.getDeletedAt() != null || !item.getUser().getId().equals(DefaultUser.ID))
         return new TargetResolution(null, List.of(), false);
       String requestedType = slot(slots, "item_type");
       if (requestedType != null && item.getType() != ItemType.valueOf(requestedType.toUpperCase(Locale.ROOT)))
@@ -553,6 +563,11 @@ public class IntentDispatcher {
       String query = slot(slots, "query");
       if (query == null) return new TargetResolution(null, List.of(), true);
       var ranked = search.search(query, 3);
+      String requestedType = slot(slots, "item_type");
+      if (requestedType != null) {
+        ItemType expected = ItemType.valueOf(requestedType.toUpperCase(Locale.ROOT));
+        ranked = ranked.stream().filter(c -> c.item().getType() == expected).toList();
+      }
       var confident = search.confident(ranked);
       if (confident.isPresent()) return new TargetResolution(confident.get(), List.of(), true);
       return new TargetResolution(null, ranked.stream().map(ItemSearchService.Candidate::item).toList(), true);
@@ -610,8 +625,17 @@ public class IntentDispatcher {
     Item item = target.item();
     String newDate = slot(slots, "new_date_expr");
     String newTime = slot(slots, "new_time_expr");
+    String newTitle = slot(slots, "new_title");
+    if (newTitle != null) {
+      item.setTitle(normalizeTitle(newTitle, item.getType()));
+      items.saveAndFlush(item);
+      session.setLastItem(item);
+      session.setPendingClarification(null);
+      return finish(session, request, "done", "update_item", composer.renamed(item), List.of(item), true, payload);
+    }
     if (newDate == null && newTime == null)
-      return clarify(session, request, payload, "missing_slot", "date", "На какую дату или время перенести запись?");
+      return clarify(session, request, payload, "missing_slot", "date",
+          item.getType() == ItemType.TASK ? "На какую дату перенести задачу?" : "На какую дату или время перенести запись?");
 
     Instant current = item.getType() == ItemType.TASK ? item.getDueAt() : item.getStartAt();
     if (current == null) return clarify(session, request, payload, "missing_slot", "date", "На какую дату перенести запись?");
@@ -643,6 +667,57 @@ public class IntentDispatcher {
     session.setLastItem(item);
     session.setPendingClarification(null);
     return finish(session, request, "done", "update_item", composer.updated(item, zone), List.of(item), true, payload);
+  }
+
+
+  private MessageResponse delete(
+      ChatSession session, MessageRequest request, JsonNode payload, ZoneId zone) {
+    TargetResolution target = resolveTarget(session, payload.get("slots"));
+    if (target.item() == null) {
+      if (!target.candidates().isEmpty()) return chooseItemClarification(session, request, payload, target.candidates(), zone);
+      if (target.byQuery()) return finish(session, request, "info", "delete_item",
+          "Не нашёл такую запись. Уточните название.", List.of(), false, payload);
+      return clarify(session, request, payload, "choose_item", "item", "Какую запись удалить?");
+    }
+    Item item = target.item();
+    Map<String, Object> pending = new LinkedHashMap<>();
+    pending.put("kind", "confirm_delete");
+    pending.put("intent", "delete_item");
+    pending.put("draft", payload.path("slots"));
+    pending.put("awaiting", List.of("decision"));
+    pending.put("item_id", item.getId().toString());
+    pending.put("created_at", clock.instant().toString());
+    session.setPendingClarification(mapper.valueToTree(pending));
+    return finish(session, request, "clarification", "delete_item", composer.deleteConfirmation(item, zone), List.of(item), false, payload);
+  }
+
+  private MessageResponse deleteConfirmed(
+      ChatSession session, MessageRequest request, JsonNode payload, ZoneId zone) {
+    TargetResolution target = resolveTarget(session, payload.get("slots"));
+    if (target.item() == null) return finish(session, request, "info", "delete_item",
+        "Эта запись уже недоступна.", List.of(), false, payload);
+    Item item = target.item();
+    item.softDelete();
+    items.saveAndFlush(item);
+    if (session.getLastItem() != null && session.getLastItem().getId().equals(item.getId())) session.setLastItem(null);
+    session.setPendingClarification(null);
+    return finish(session, request, "done", "delete_item", composer.deleted(item), List.of(), true, payload);
+  }
+
+  private static boolean explicitTypeMentioned(String text, String filter) {
+    String t = text == null ? "" : text.toLowerCase(Locale.ROOT).replace('ё', 'е');
+    return switch (filter) {
+      case "task" -> t.contains("задач");
+      case "meeting" -> t.contains("встреч");
+      case "reminder" -> t.contains("напомин");
+      default -> false;
+    };
+  }
+
+  private static boolean looksLikeTimeOnly(String text) {
+    if (text.matches(".*\\b\\d{1,2}[:.]\\d{2}\\b.*")) return true;
+    return (text.contains("утра") || text.contains("вечера") || text.contains("час"))
+        && !text.matches(".*(сегодня|завтра|послезавтра|понедель|вторник|сред|четверг|пятниц|суббот|воскрес|январ|феврал|март|апрел|ма[йя]|июн|июл|август|сентябр|октябр|ноябр|декабр).*" );
   }
 
   private MessageResponse complete(
