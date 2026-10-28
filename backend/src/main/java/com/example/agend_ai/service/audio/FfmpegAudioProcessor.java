@@ -36,13 +36,12 @@ public class FfmpegAudioProcessor implements AudioProcessor {
       throw new AppException(ErrorCode.AUDIO_FORMAT_UNSUPPORTED);
     }
 
-    // Browser WebM produced around MediaRecorder pause/resume may be decodable by ffmpeg
-    // while its container duration metadata is absent. Normalize first, then probe the stable Ogg.
-    byte[] normalized = transcode(source);
-    if (normalized.length == 0) throw new AppException(ErrorCode.AUDIO_FORMAT_UNSUPPORTED);
-    double duration = probeDuration(normalized);
+    double duration = probeDuration(source);
     if (!Double.isFinite(duration) || duration <= 0) throw new AppException(ErrorCode.AUDIO_FORMAT_UNSUPPORTED);
     if (duration > limits.maxAudioSec() + 0.05) throw new AppException(ErrorCode.AUDIO_TOO_LONG);
+
+    byte[] normalized = transcode(source);
+    if (normalized.length == 0) throw new AppException(ErrorCode.AUDIO_FORMAT_UNSUPPORTED);
     return new AudioPayload(normalized, duration);
   }
 
@@ -54,17 +53,12 @@ public class FfmpegAudioProcessor implements AudioProcessor {
 
   private double probeDuration(byte[] source) {
     Process process = start(
-        "ffprobe", "-v", "error", "-show_entries", "packet=duration_time",
-        "-of", "csv=p=0", "pipe:0");
+        "ffprobe", "-v", "error", "-show_entries", "format=duration",
+        "-of", "default=noprint_wrappers=1:nokey=1", "pipe:0");
     ProcessOutput out = communicate(process, source);
     if (out.exitCode() != 0) throw new AppException(ErrorCode.AUDIO_FORMAT_UNSUPPORTED);
     try {
-      double total = 0;
-      for (String line : new String(out.stdout(), StandardCharsets.UTF_8).split("\\R")) {
-        String value = line.strip();
-        if (!value.isEmpty() && !"N/A".equals(value)) total += Double.parseDouble(value);
-      }
-      return total;
+      return Double.parseDouble(new String(out.stdout(), StandardCharsets.UTF_8).strip());
     } catch (NumberFormatException e) {
       throw new AppException(ErrorCode.AUDIO_FORMAT_UNSUPPORTED);
     }
