@@ -64,3 +64,10 @@ cors:
 
 debug:
   save-audio: false
+
+# Web Push. Disabled until a VAPID keypair is configured.
+push:
+  public-key: ${PUSH_PUBLIC_KEY:}
+  private-key: ${PUSH_PRIVATE_KEY:}
+  subject: ${PUSH_SUBJECT:mailto:admin@example.com}
+  scan-delay-ms: ${PUSH_SCAN_DELAY_MS:15000}

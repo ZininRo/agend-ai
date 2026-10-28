@@ -20,6 +20,12 @@
     </properties>
 
     <dependencies>
+        <!-- RFC 8291 Web Push encryption and VAPID signing -->
+        <dependency>
+            <groupId>nl.martijndwars</groupId>
+            <artifactId>web-push</artifactId>
+            <version>5.1.1</version>
+        </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
