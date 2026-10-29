@@ -1,18 +1,20 @@
-export type RecordKind = 'task' | 'meeting' | 'event';
-
+import type { ItemStatus } from '../../api/types';
+export type RecordKind = 'task' | 'meeting' | 'reminder';
 export type RecordItem = {
   id: string;
   kind: RecordKind;
   title: string;
-  /** Дата в формате YYYY-MM-DD */
+  description?: string;
+  status: ItemStatus;
   date: string;
-  /** «HH:MM». Только для встреч и событий. */
   startTime?: string;
   endTime?: string;
   place?: string;
+  startAt?: string | null;
+  endAt?: string | null;
+  dueAt?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
 };
-
-/** month: 0–11, как в Date.getMonth() */
 export type Month = { year: number; month: number };
-
 export type RecordsByKind = Record<RecordKind, RecordItem[]>;

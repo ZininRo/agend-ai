@@ -12,12 +12,12 @@ function byDateTime(a: RecordItem, b: RecordItem): number {
 
 /** Раскладывает записи по типам и сортирует по дате и времени. */
 function groupRecords(items: RecordItem[]): RecordsByKind {
-  const result: RecordsByKind = { task: [], meeting: [], event: [] };
+  const result: RecordsByKind = { task: [], meeting: [], reminder: [] };
   for (const record of [...items].sort(byDateTime)) result[record.kind].push(record);
   return result;
 }
 
-const EMPTY: RecordsByKind = { task: [], meeting: [], event: [] };
+const EMPTY: RecordsByKind = { task: [], meeting: [], reminder: [] };
 
 type Result = { requestKey: string; monthKey: string; records?: RecordsByKind; error?: ApiError };
 

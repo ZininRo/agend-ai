@@ -24,7 +24,7 @@ import styles from './Sidebar.module.css';
 const RECORD_SECTIONS: { kind: RecordKind; label: string; icon: ReactNode }[] = [
   { kind: 'task', label: 'Задачи', icon: <TasksIcon /> },
   { kind: 'meeting', label: 'Встречи', icon: <MeetingsIcon /> },
-  { kind: 'event', label: 'События', icon: <EventsIcon /> },
+  { kind: 'reminder', label: 'Напоминания', icon: <EventsIcon /> },
 ];
 
 type Props = {
@@ -37,7 +37,7 @@ export function Sidebar({ collapsed, onToggleCollapsed }: Props) {
   const [openKinds, setOpenKinds] = useState<Record<RecordKind, boolean>>({
     task: false,
     meeting: false,
-    event: false,
+    reminder: false,
   });
   const { month, select } = useMonth();
   const { records, status, error, reload } = useRecords(month);

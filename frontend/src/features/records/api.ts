@@ -1,15 +1,14 @@
 
 import { request } from '../../api/http';
-import type { ItemDto, ItemType, ItemsResponseDto } from '../../api/types';
+import type { ItemDto, ItemType, ItemStatus, ItemsResponseDto } from '../../api/types';
 import type { Month, RecordItem, RecordKind } from './types';
 import { getTimezone } from '../../api/session';
 
-// Типы записей на бэкенде: task | meeting | reminder. В меню третий раздел называется «События»,
-// поэтому reminder показывается там (подпись раздела — в Sidebar.tsx).
+// Типы записей соответствуют ItemType backend.
 const KIND_BY_TYPE: Record<ItemType, RecordKind> = {
   task: 'task',
   meeting: 'meeting',
-  reminder: 'event',
+  reminder: 'reminder',
 };
 
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -30,11 +29,13 @@ function monthRange({ year, month }: Month) {
 export function toRecordItem(dto: ItemDto): RecordItem | null {
   const kind = KIND_BY_TYPE[dto.type];
   const main = kind === 'task' ? dto.due_at : dto.start_at;
-  if (!kind || !main) return null;
+  if (!kind) return null;
+  const dateValue = main ?? dto.created_at;
+  if (!dateValue) return null;
 
-  const item: RecordItem = { id: dto.id, kind, title: dto.title, date: main.slice(0, 10) };
+  const item: RecordItem = { id: dto.id, kind, title: dto.title, description: dto.description ?? undefined, status: dto.status, date: dateValue.slice(0, 10), createdAt: dto.created_at, updatedAt: dto.updated_at, startAt: dto.start_at, endAt: dto.end_at, dueAt: dto.due_at };
   if (kind !== 'task') {
-    item.startTime = main.slice(11, 16);
+    if (main) item.startTime = main.slice(11, 16);
     if (dto.end_at) item.endTime = dto.end_at.slice(11, 16);
     if (dto.place) item.place = dto.place;
   }
@@ -49,4 +50,26 @@ export async function fetchRecords(month: Month, signal?: AbortSignal): Promise<
     signal,
   });
   return response.items.map(toRecordItem).filter((item): item is RecordItem => item !== null);
+}
+
+/** Изменение статуса и мягкое удаление через backend API. */
+export async function updateRecordStatus(id: string, status: ItemStatus): Promise<ItemDto> {
+  return request<ItemDto>(`/api/items/${encodeURIComponent(id)}/status`, {
+    method: 'PATCH', json: { status }, query: { timezone: getTimezone() },
+  });
+}
+
+export async function deleteRecord(id: string): Promise<void> {
+  return request<void>(`/api/items/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
+/** Редактирование полей записи. Даты — ISO 8601 с часовым смещением. */
+export async function updateRecord(id: string, changes: {
+  title: string; description: string | null; place: string | null;
+  startAt: string | null; endAt: string | null; dueAt: string | null; status: ItemStatus;
+}): Promise<ItemDto> {
+  return request<ItemDto>(`/api/items/${encodeURIComponent(id)}`, {
+    method: 'PATCH', query: { timezone: getTimezone() }, json: { title: changes.title, description: changes.description, place: changes.place,
+      start_at: changes.startAt, end_at: changes.endAt, due_at: changes.dueAt, status: changes.status },
+  });
 }

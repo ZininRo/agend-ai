@@ -16,7 +16,7 @@ type ErrorBody = {
 const DEFAULT_TIMEOUT_MS = 15_000;
 
 type Options = {
-  method?: 'GET' | 'POST';
+  method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
   /** Тело JSON */
   json?: unknown;
   /** Тело multipart (загрузка аудио). Заголовок Content-Type браузер ставит сам. */
@@ -76,6 +76,7 @@ export async function request<T>(path: string, options: Options = {}): Promise<T
       signal: controller.signal,
     });
     if (!response.ok) throw await parseError(response);
+    if (response.status === 204) return undefined as T;
     try {
       return (await response.json()) as T;
     } catch {

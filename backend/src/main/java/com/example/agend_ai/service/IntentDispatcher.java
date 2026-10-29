@@ -81,6 +81,50 @@ public class IntentDispatcher {
           List.of(),
           false,
           null);
+    // Confirmation replies must be interpreted against the pending operation, not guessed by the LLM.
+    JsonNode pending = session.getPendingClarification();
+    if (pending != null && "confirm_delete".equals(pending.path("kind").asText())) {
+      String normalized = text.toLowerCase(Locale.ROOT).replace('ё', 'е').trim();
+      if (normalized.matches("(?iu)^(да|ага|подтверждаю|удаляй|удалить|хочу удалить|да,? удаляй)[.! ]*$")
+          || normalized.matches("(?iu)^(нет|не удаляй|отмена|не надо)[.! ]*$")) {
+        var reply = mapper.createObjectNode();
+        reply.put("intent", "clarification_answer");
+        reply.put("confidence", 1.0);
+        reply.putObject("slots").put("answer", normalized);
+        return clarificationAnswer(session, request, reply, zone);
+      }
+    }
+    // Status changes are deterministic: do not let the LLM interpret 'отменена' as deletion.
+    String normalizedText = text.toLowerCase(Locale.ROOT).replace('ё', 'е');
+    if (normalizedText.matches("(?s).*\\b(измени|изменить|поменяй|поставь|установи)\\b.*\\bстатус\\b.*")
+        || normalizedText.matches("(?s).*\\b(отметь|сделай)\\b.*\\b(отмененн|отменен|запланирован)\\w*.*")) {
+      ItemStatus requestedStatus = null;
+      if (normalizedText.matches("(?s).*\\b(отменена|отменено|отменен|отмененной|отмененным|cancelled)\\b.*"))
+        requestedStatus = ItemStatus.CANCELLED;
+      else if (normalizedText.matches("(?s).*\\b(выполнена|выполнено|выполнен|выполненной|done)\\b.*"))
+        requestedStatus = ItemStatus.DONE;
+      else if (normalizedText.matches("(?s).*\\b(запланирована|запланировано|запланирован|запланированной|todo)\\b.*"))
+        requestedStatus = ItemStatus.TODO;
+      if (requestedStatus != null) {
+        var command = mapper.createObjectNode();
+        command.put("intent", "update_item");
+        command.put("confidence", 1.0);
+        var slots = command.putObject("slots");
+        slots.put("new_status", requestedStatus.name());
+        // An explicit name wins over the conversational last-item reference.
+        String query = text.replaceFirst("(?iu)^.*?\\b(?:встречи|встречу|напоминания|напоминание|задачи|задачу)\\s+", "")
+            .replaceFirst("(?iu)^(?:на\\s+)?(?:отменена|отменено|отменен|выполнена|выполнено|выполнен|запланирована|запланировано|запланирован)\\s*$", "")
+            .replaceFirst("(?iu)\\s+на\\s+(?:отменена|отменено|отменен|выполнена|выполнено|выполнен|запланирована|запланировано|запланирован)\\s*$", "").trim();
+        if (!query.isBlank() && !query.equalsIgnoreCase(text)
+            && !query.matches("(?iu)^(этой|эту|того|той|этого|ее|её)$")
+            && !query.matches("(?iu)^(статус|статус этой встречи|статус этой задачи)$")) {
+          slots.put("item_ref", "by_query");
+          slots.put("query", query);
+        } else slots.put("item_ref", "last");
+        session.setPendingClarification(null);
+        return update(session, request, command, zone);
+      }
+    }
     JsonNode payload = null;
     String data = prompts.data(session, text, zone, clock.instant());
     for (int attempt = 0; attempt < 2; attempt++) {
@@ -408,12 +452,12 @@ public class IntentDispatcher {
 
     if (Set.of("cancel", "no", "нет", "отмена", "не надо").contains(normalized)) {
       session.setPendingClarification(null);
-      return finish(session, request, "info", "clarification_answer", "Хорошо, не создаю.",
+      return finish(session, request, "info", "clarification_answer", "Хорошо, отменяю действие.",
           List.of(), false, payload);
     }
 
     if ("confirm_delete".equals(kind)) {
-      if (Set.of("yes", "да", "подтверждаю", "удаляй", "удалить").contains(normalized)) {
+      if (Set.of("yes", "да", "подтверждаю", "удаляй", "удалить", "хочу удалить", "ага", "да, удаляй").contains(normalized)) {
         JsonNode resumed = resumePayload(pending, "delete_item", "selected_item_id", pending.path("item_id").asText());
         session.setPendingClarification(null);
         return deleteConfirmed(session, request, resumed, zone);
@@ -633,6 +677,25 @@ public class IntentDispatcher {
     if (newTime == null && slot(slots, "new_date_expr") == null) {
       var shiftInText = TIME_SHIFT.matcher(request.text());
       if (shiftInText.find()) newTime = shiftInText.group();
+    }
+    String newStatus = slot(slots, "new_status");
+    if (newStatus != null) {
+      final ItemStatus status;
+      try { status = ItemStatus.valueOf(newStatus.toUpperCase(Locale.ROOT)); }
+      catch (IllegalArgumentException e) {
+        return finish(session, request, "refused", "update_item", "Неизвестный статус записи.", List.of(), false, payload);
+      }
+      item.setStatus(status);
+      items.saveAndFlush(item);
+      session.setLastItem(item);
+      session.setPendingClarification(null);
+      String label = switch (status) {
+        case TODO -> "Запланировано";
+        case DONE -> "Выполнено";
+        case CANCELLED -> "Отменено";
+      };
+      return finish(session, request, "done", "update_item",
+          "Статус записи «" + item.getTitle() + "»: " + label + ".", List.of(item), true, payload);
     }
     String newTitle = slot(slots, "new_title");
     if (newTitle != null) {
