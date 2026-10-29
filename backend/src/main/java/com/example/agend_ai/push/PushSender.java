@@ -6,6 +6,8 @@ import org.apache.http.HttpResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import java.nio.charset.StandardCharsets;
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
+import java.security.Security;
 
 @Component
 public class PushSender {
@@ -15,6 +17,9 @@ public class PushSender {
     public PushSender(@Value("${push.public-key:}") String publicKey,
                       @Value("${push.private-key:}") String privateKey,
                       @Value("${push.subject:mailto:admin@example.com}") String subject) throws Exception {
+        if (Security.getProvider(BouncyCastleProvider.PROVIDER_NAME) == null) {
+            Security.addProvider(new BouncyCastleProvider());
+        }
         this.publicKey = publicKey;
         if (publicKey.isBlank() || privateKey.isBlank()) {
             this.service = null;

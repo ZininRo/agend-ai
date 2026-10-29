@@ -37,9 +37,12 @@ public class IntentDispatcher {
   private final MessageRepository messages;
   private final UserRepository users;
   private final ObjectMapper mapper;
+  // Относительное смещение существующей записи, а не время от текущего момента.
+  private static final Pattern TIME_SHIFT = Pattern.compile(
+      "(?iu)(?:на\\s+)?(\\d{1,5})\\s*(минут(?:у|ы)?|мин|час(?:а|ов)?|ч)\\s*(позже|раньше|впер[её]д|назад)");
   private static final Pattern INJECTION =
       Pattern.compile(
-          "(?ius)(игнорируй|забудь|ignore|disregard).{0,60}(инструкц|правил|prompt|instruction)|(?:system|assistant)\\s*:|раскрой.{0,30}(промпт|ключ|секрет)");
+          "(?ius)(игнорируй|забудь|ignore|disregard).{0,60}(инструкц|правил|prompt|instruction)|(?:system|assistant)\s*:|раскрой.{0,30}(промпт|ключ|секрет)");
 
   @Transactional
   public MessageResponse process(MessageRequest raw) {
@@ -161,7 +164,7 @@ public class IntentDispatcher {
 
   /** «позвонить Ивану» → «Позвонить Ивану»; для встречи «с командой» → «Встреча с командой». */
   private static String normalizeTitle(String raw, ItemType type) {
-    String t = raw.strip().replaceAll("\\s+", " ").replaceAll("[.!?]+$", "").strip();
+    String t = raw.strip().replaceAll("\s+", " ").replaceAll("[.!?]+$", "").strip();
     if (t.isEmpty()) return raw;
     String lower = t.toLowerCase(Locale.ROOT);
     if (type == ItemType.MEETING && (lower.startsWith("с ") || lower.startsWith("со ")))
@@ -625,6 +628,12 @@ public class IntentDispatcher {
     Item item = target.item();
     String newDate = slot(slots, "new_date_expr");
     String newTime = slot(slots, "new_time_expr");
+    // NLU иногда пропускает new_time_expr, хотя пользователь явно назвал смещение.
+    // Берём выражение из исходной команды только при обновлении записи.
+    if (newTime == null && slot(slots, "new_date_expr") == null) {
+      var shiftInText = TIME_SHIFT.matcher(request.text());
+      if (shiftInText.find()) newTime = shiftInText.group();
+    }
     String newTitle = slot(slots, "new_title");
     if (newTitle != null) {
       item.setTitle(normalizeTitle(newTitle, item.getType()));
@@ -643,7 +652,28 @@ public class IntentDispatcher {
     String dateExpr = newDate != null ? newDate : old.toLocalDate().toString();
     String timeExpr = newTime != null ? newTime
         : (item.getType() == ItemType.TASK && old.toLocalTime().equals(LocalTime.of(23, 59)) ? null : old.toLocalTime().toString());
-    var resolved = dates.resolve(dateExpr, timeExpr, zone, null);
+    var shift = newTime == null ? null : TIME_SHIFT.matcher(newTime.strip());
+    DateResolver.ResolvedDateTime resolved;
+    if (shift != null && shift.matches() && newDate == null) {
+      long amount;
+      try { amount = Long.parseLong(shift.group(1)); }
+      catch (NumberFormatException ex) { amount = -1; }
+      if (amount <= 0 || amount > 10000)
+        return clarify(session, request, payload, "missing_slot", "time", "Укажите смещение от 1 до 10000 минут или часов.");
+      String unit = shift.group(2).toLowerCase(Locale.ROOT);
+      long minutes = unit.startsWith("ч") ? Math.multiplyExact(amount, 60) : amount;
+      String direction = shift.group(3).toLowerCase(Locale.ROOT);
+      Instant shifted = current.plus(Duration.ofMinutes(
+          direction.equals("раньше") || direction.equals("назад") ? -minutes : minutes));
+      // Проверяем, что новое локальное время однозначно при переходе на летнее/зимнее время.
+      LocalDateTime local = shifted.atZone(zone).toLocalDateTime();
+      if (zone.getRules().getValidOffsets(local).size() != 1)
+        return clarify(session, request, payload, "missing_slot", "time", "Укажите точное время: в этом часовом поясе время неоднозначно.");
+      resolved = new DateResolver.ResolvedDateTime(shifted, shifted, false, shifted.isBefore(clock.instant()),
+          shifted.isBefore(clock.instant()) ? "past" : null);
+    } else {
+      resolved = dates.resolve(dateExpr, timeExpr, zone, null);
+    }
     if (resolved.needsDateClarification() || (item.getType() != ItemType.TASK && resolved.startAt() == null))
       return clarify(session, request, payload, "missing_slot", resolved.startAt() == null ? "time" : "date",
           resolved.startAt() == null ? "На какое время перенести запись?" : "Уточните новую дату.");

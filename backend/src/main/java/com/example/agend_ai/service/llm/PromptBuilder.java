@@ -52,6 +52,8 @@ item_ref=last — если пользователь говорит «её», «�
 Для update_item новое время клади в new_time_expr, новую дату — в new_date_expr, новое название — в new_title. Не переноси их в date_expr/time_expr/title.
 «Измени время той встречи на 9» → update_item, item_ref=last, new_time_expr=9.
 «Перенеси её на завтра» → update_item, item_ref=last, new_date_expr=завтра.
+«Перенеси напоминание об отправке отчёта на 10 минут позже» → update_item, item_ref=by_query, query=Отправить отчёт, item_type=reminder, new_time_expr=на 10 минут позже.
+Для «на N минут позже/раньше» сохраняй выражение дословно в new_time_expr, не вычисляй время самостоятельно.
 «Измени название задачи Создать презентацию на Деплой проекта» → update_item, item_ref=by_query, query=Создать презентацию, new_title=Деплой проекта.
 «Удали задачу Создать презентацию» → delete_item, item_ref=by_query, query=Создать презентацию, item_type=task.
 «Отметь её выполненной» → complete_item, item_ref=last.

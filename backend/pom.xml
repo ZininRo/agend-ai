@@ -88,6 +88,12 @@
             <version>3.13.1</version>
             <scope>test</scope>
         </dependency>
+        <!-- Bouncy Castle: криптография для Web Push / VAPID -->
+        <dependency>
+            <groupId>org.bouncycastle</groupId>
+            <artifactId>bcprov-jdk18on</artifactId>
+            <version>1.83</version>
+        </dependency>
 
     </dependencies>
 
