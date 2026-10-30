@@ -103,3 +103,5 @@ log/
 *.log
 
 node_modules/
+# Local PostgreSQL backups (sensitive)
+/backups/

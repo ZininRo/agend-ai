@@ -105,6 +105,11 @@
                 <configuration>
                     <!-- Explicit agent also works in CI where dynamic JVM attachment is disabled. -->
                     <argLine>-javaagent:"${settings.localRepository}/org/mockito/mockito-core/${mockito.version}/mockito-core-${mockito.version}.jar"</argLine>
+                    <!-- Fixed NON-PRODUCTION key for forked Maven test JVMs only.
+                         Production still requires DATA_ENCRYPTION_KEY from its environment. -->
+                    <environmentVariables>
+                        <DATA_ENCRYPTION_KEY>AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=</DATA_ENCRYPTION_KEY>
+                    </environmentVariables>
                 </configuration>
             </plugin>
             <plugin>

@@ -140,18 +140,9 @@ public class IntentDispatcher {
         payload = validator.parse(ModelOutputCleaner.clean(generated, mapper));
         break;
       } catch (IllegalArgumentException e) {
-        // Причину пишем всегда, а сам ответ модели (там может быть текст пользователя) — только в DEBUG.
-        log.warn(
-            "NLU: ответ модели отклонён (попытка {} из 2): {}; длина ответа {} симв.",
-            attempt + 1,
-            e.getMessage(),
-            generated == null ? 0 : generated.length());
-        if (log.isDebugEnabled())
-          log.debug(
-              "NLU: ответ модели: {}",
-              generated == null
-                  ? "null"
-                  : generated.length() <= 1000 ? generated : generated.substring(0, 1000) + "…");
+        // Never log model output or parser messages: both can contain user input.
+        log.warn("NLU response rejected (attempt {} of 2; length {} chars)",
+            attempt + 1, generated == null ? 0 : generated.length());
       }
     }
     if (payload == null)

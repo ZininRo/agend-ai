@@ -79,8 +79,8 @@ public class GlobalExceptionHandler {
 
   @ExceptionHandler(Exception.class)
   public ResponseEntity<ApiError> handleOther(Exception ex) {
-    // Полный стек нужен, чтобы найти причину; пользовательский текст сюда не попадает.
-    log.error("Unhandled exception", ex);
+    // Exception messages and stack traces can contain request payloads or decrypted values.
+    log.error("Unhandled exception type: {}", ex.getClass().getName());
     return respond(ErrorCode.INTERNAL_ERROR, HttpStatus.INTERNAL_SERVER_ERROR, null);
   }
 

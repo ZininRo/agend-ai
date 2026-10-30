@@ -1,0 +1,92 @@
+# Production stack: use instead of docker-compose.yml (NOT alongside it).
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: agendai
+      POSTGRES_USER: ${DB_USER:?Set DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [internal]
+    mem_limit: 768m
+    cpus: 0.75
+    security_opt: [no-new-privileges:true]
+
+  app:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=65 -XX:+ExitOnOutOfMemoryError -Dfile.encoding=UTF-8"
+      DB_URL: jdbc:postgresql://db:5432/agendai
+      DB_USER: ${DB_USER:?Set DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD}
+      DATA_ENCRYPTION_KEY: ${DATA_ENCRYPTION_KEY:?Set DATA_ENCRYPTION_KEY}
+      CORS_ALLOWED_ORIGINS: https://${APP_DOMAIN:?Set APP_DOMAIN}
+      LLM_PROVIDER: ${LLM_PROVIDER:-yandexgpt}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_FOLDER_ID: ${LLM_FOLDER_ID:-}
+      LLM_MODEL: ${LLM_MODEL:-yandexgpt/latest}
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://llm.api.cloud.yandex.net}
+      STT_PROVIDER: ${STT_PROVIDER:-speechkit}
+      STT_API_KEY: ${STT_API_KEY:-}
+      LLM_TIMEOUT_SEC: ${LLM_TIMEOUT_SEC:-15}
+      LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-1000}
+      PUSH_PUBLIC_KEY: ${PUSH_PUBLIC_KEY:-}
+      PUSH_PRIVATE_KEY: ${PUSH_PRIVATE_KEY:-}
+      PUSH_SUBJECT: ${PUSH_SUBJECT:?Set PUSH_SUBJECT}
+      SPRINGDOC_API_DOCS_ENABLED: 'false'
+      SPRINGDOC_SWAGGER_UI_ENABLED: 'false'
+      LOGGING_LEVEL_ROOT: WARN
+      LOGGING_LEVEL_COM_EXAMPLE_AGEND_AI: INFO
+    networks: [internal]
+    mem_limit: 1792m
+    cpus: 1.5
+    security_opt: [no-new-privileges:true]
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    depends_on: [app]
+    mem_limit: 192m
+    cpus: 0.5
+    networks: [internal]
+    security_opt: [no-new-privileges:true]
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - '80:80'
+      - '443:443'
+      - '443:443/udp'
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN:?Set APP_DOMAIN}
+      BASIC_AUTH_USER: ${BASIC_AUTH_USER:?Set BASIC_AUTH_USER}
+      BASIC_AUTH_HASH: ${BASIC_AUTH_HASH:?Set BASIC_AUTH_HASH}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [frontend]
+    mem_limit: 192m
+    cpus: 0.5
+    networks: [internal]
+    security_opt: [no-new-privileges:true]
+
+networks:
+  internal:
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:
