@@ -246,6 +246,19 @@ class MessageApiRefinementsTest extends DatabaseTestSupport {
   }
 
   @Test
+  void standaloneListInterruptsReminderClarification() throws Exception {
+    send("Создай напоминание")
+        .andExpect(jsonPath("$.result").value("clarification"))
+        .andExpect(jsonPath("$.reply_text").value("На какую дату поставить запись?"));
+    assertThat(sessions.findById(session).orElseThrow().getPendingClarification()).isNotNull();
+
+    wire.resetAll();
+    stub(payload("list_items", Map.of("period_expr", "сегодня")));
+    send("Что у меня сегодня?").andExpect(jsonPath("$.result").value("info"));
+    assertThat(sessions.findById(session).orElseThrow().getPendingClarification()).isNull();
+  }
+
+  @Test
   void deleteItemWithoutExistingLastItemAsksWhichItem() throws Exception {
     stub(payload("delete_item", Map.of("item_ref", "last")));
     send("Удали встречу")
@@ -277,5 +290,86 @@ class MessageApiRefinementsTest extends DatabaseTestSupport {
     assertThat(data.at("/history/0/role").asText()).isEqualTo("USER");
     assertThat(data.at("/history/1/role").asText()).isEqualTo("ASSISTANT");
   }
-}
+  @Test
+  void simpleReminderFlowTomorrowThenExactTimeDoesNotCallLlmAfterStart() throws Exception {
+    send("Создай напоминание")
+        .andExpect(jsonPath("$.result").value("clarification"))
+        .andExpect(jsonPath("$.reply_text").value("На какую дату поставить запись?"));
+    wire.verify(0, postRequestedFor(urlEqualTo("/foundationModels/v1/completion")));
 
+    send("завтра")
+        .andExpect(jsonPath("$.result").value("clarification"))
+        .andExpect(jsonPath("$.reply_text").value("На какое время поставить напоминание?"));
+    wire.verify(0, postRequestedFor(urlEqualTo("/foundationModels/v1/completion")));
+
+    send("в 10:00")
+        .andExpect(jsonPath("$.result").value("done"))
+        .andExpect(jsonPath("$.items[0].type").value("reminder"))
+        .andExpect(jsonPath("$.items[0].start_at").value("2026-10-24T10:00:00+03:00"));
+    assertThat(items.count()).isEqualTo(1);
+  }
+
+  @Test
+  void simpleReminderFlowAcceptsTodayAndRelativeTime() throws Exception {
+    send("Создай напоминание")
+        .andExpect(jsonPath("$.reply_text").value("На какую дату поставить запись?"));
+    send("Сегодня")
+        .andExpect(jsonPath("$.reply_text").value("На какое время поставить напоминание?"));
+    send("через два часа")
+        .andExpect(jsonPath("$.result").value("done"))
+        .andExpect(jsonPath("$.items[0].start_at").value("2026-10-23T16:02:00+03:00"));
+  }
+
+  @Test
+  void simpleReminderFlowAcceptsCompactRelativeTimeTypo() throws Exception {
+    send("Создай напоминание");
+    send("завтра");
+    send("через двчаса")
+        .andExpect(jsonPath("$.result").value("done"))
+        .andExpect(jsonPath("$.items[0].start_at").value("2026-10-23T16:02:00+03:00"));
+  }
+
+  @Test
+  void invalidReminderTimeRepeatsTimeQuestionNotDateQuestion() throws Exception {
+    send("Создай напоминание");
+    send("завтра");
+    send("когда-нибудь вечером")
+        .andExpect(jsonPath("$.result").value("clarification"))
+        .andExpect(jsonPath("$.reply_text").value(
+            "Не понял время. Скажите, например: в 15:00, в три часа или через два часа."));
+
+    send("18:30")
+        .andExpect(jsonPath("$.result").value("done"))
+        .andExpect(jsonPath("$.items[0].start_at").value("2026-10-24T18:30:00+03:00"));
+  }
+
+  @Test
+  void simpleMeetingFlowKeepsDateUntilTimeArrives() throws Exception {
+    send("Создай встречу")
+        .andExpect(jsonPath("$.reply_text").value("На какую дату поставить запись?"));
+    send("послезавтра")
+        .andExpect(jsonPath("$.reply_text").value("На какое время поставить встречу?"));
+    send("15:00")
+        .andExpect(jsonPath("$.result").value("done"))
+        .andExpect(jsonPath("$.items[0].type").value("meeting"))
+        .andExpect(jsonPath("$.items[0].start_at").value("2026-10-25T15:00:00+03:00"));
+  }
+
+  @Test
+  void simpleTaskFlowCreatesAfterDateWithoutAskingTime() throws Exception {
+    send("Создай задачу")
+        .andExpect(jsonPath("$.reply_text").value("На какую дату поставить запись?"));
+    send("завтра")
+        .andExpect(jsonPath("$.result").value("done"))
+        .andExpect(jsonPath("$.items[0].type").value("task"));
+  }
+
+  @Test
+  void capabilitiesPhraseIsHandledWithoutLlm() throws Exception {
+    send("Что ты умеешь?")
+        .andExpect(jsonPath("$.result").value("info"))
+        .andExpect(jsonPath("$.reply_text").value(org.hamcrest.Matchers.containsString("создавать задачи")));
+    wire.verify(0, postRequestedFor(urlEqualTo("/foundationModels/v1/completion")));
+  }
+
+}

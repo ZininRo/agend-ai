@@ -33,8 +33,8 @@ export function RecordsSection({ label, icon, items, expanded, onToggle, emptyTe
 function RecordRow({ item }: { item: RecordItem }) {
   const [open, setOpen] = useState(false);
   const isTask = item.kind === 'task';
-  return <li className={`${styles.row} ${isTask ? styles.plain : ''}`}>
-    {!isTask && <span className={styles.day}>{getDayOfMonth(item.date)}</span>}
+  return <li className={styles.row}>
+    <span className={styles.day}>{getDayOfMonth(item.date)}</span>
     <button type="button" className={styles.recordButton} onClick={() => setOpen(true)} aria-label={`Открыть запись ${item.title}`}>
       <span className={styles.recordHeading}>
         <span className={`${styles.dot} ${styles[item.status]}`} title={statusLabel(item.status)} />

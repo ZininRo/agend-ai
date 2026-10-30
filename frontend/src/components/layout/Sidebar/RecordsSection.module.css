@@ -93,3 +93,16 @@
 .saveButton { color: #fff; background: var(--color-accent); border: 1px solid var(--color-accent); }
 .deleteButton { color: #ff6c78; background: transparent; border: 1px solid rgba(255,108,120,.5); }
 .cancelButton:disabled, .saveButton:disabled, .deleteButton:disabled { opacity: .5; cursor: wait; }
+
+/* Keep description inside the dialog while allowing vertical resize. */
+.form textarea { resize: vertical; max-width: 100%; }
+.form select.statusField { padding-right: 40px; }
+.close { width: 40px; height: 40px; display: inline-flex; align-items: center; justify-content: center; border-radius: 8px; transition: background-color 150ms ease, color 150ms ease; }
+.close:hover:not(:disabled) { background: rgba(255,255,255,.10); color: #fff; }
+.saveButton { background: linear-gradient(115deg, #a35aff, #7355f5 55%, #4e86ef); border-color: transparent; font-weight: 600; }
+.saveButton:hover:not(:disabled) { filter: brightness(1.18); transform: translateY(-1px); }
+.cancelButton:hover:not(:disabled) { background: rgba(255,255,255,.11); border-color: #9a83bb; }
+.deleteButton:hover:not(:disabled) { background: rgba(255,108,120,.13); border-color: #ff6c78; }
+.cancelButton, .saveButton, .deleteButton { transition: background-color 150ms ease, filter 150ms ease, transform 150ms ease, border-color 150ms ease; }
+.close:focus-visible, .cancelButton:focus-visible, .saveButton:focus-visible, .deleteButton:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .close, .cancelButton, .saveButton, .deleteButton { transition: none; } }

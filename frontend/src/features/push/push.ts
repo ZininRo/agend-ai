@@ -52,3 +52,25 @@ export async function disablePush(): Promise<void> {
   await sendSubscription('unsubscribe', subscription);
   await subscription.unsubscribe();
 }
+
+/** Re-register an existing browser subscription after backend DB resets. No permission prompt. */
+export async function restorePushSubscription(): Promise<boolean> {
+  if (!pushSupported() || Notification.permission !== 'granted') return false;
+  const settings = await config();
+  if (!settings.enabled) return false;
+  const registration = await navigator.serviceWorker.register('/push-sw.js');
+  let subscription = await registration.pushManager.getSubscription();
+  if (subscription) {
+    const existingKey = subscription.options.applicationServerKey;
+    const expectedKey = toUint8Array(settings.public_key);
+    const actualKey = existingKey ? new Uint8Array(existingKey) : null;
+    const sameKey = actualKey?.length === expectedKey.length && actualKey.every((byte, index) => byte === expectedKey[index]);
+    if (!sameKey) {
+      await subscription.unsubscribe();
+      subscription = null;
+    }
+  }
+  subscription ??= await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: toUint8Array(settings.public_key) });
+  await sendSubscription('subscriptions', subscription);
+  return true;
+}

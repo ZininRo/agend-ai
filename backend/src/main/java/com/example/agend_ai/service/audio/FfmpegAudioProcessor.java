@@ -6,6 +6,8 @@ import com.example.agend_ai.config.LimitsProperties;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Locale;
 import java.util.Set;
@@ -17,32 +19,47 @@ import org.springframework.web.multipart.MultipartFile;
 @Component
 @RequiredArgsConstructor
 public class FfmpegAudioProcessor implements AudioProcessor {
-  private static final Set<String> SUPPORTED =
-      Set.of("audio/webm", "audio/ogg", "audio/mp4", "video/webm", "video/mp4");
-  private static final Duration PROCESS_TIMEOUT = Duration.ofSeconds(8);
+  private static final Set<String> SUPPORTED = Set.of(
+      "audio/webm", "audio/ogg", "audio/mp4", "video/webm", "video/mp4",
+      "audio/x-m4a", "audio/m4a", "audio/aac");
+  private static final Duration PROCESS_TIMEOUT = Duration.ofSeconds(25);
   private final LimitsProperties limits;
 
   @Override
   public AudioPayload normalize(MultipartFile audio) {
     if (audio == null || audio.isEmpty()) throw new AppException(ErrorCode.AUDIO_MISSING);
     if (audio.getSize() > limits.maxAudioBytes()) throw new AppException(ErrorCode.AUDIO_TOO_LARGE);
-    String contentType = baseContentType(audio.getContentType());
-    if (!SUPPORTED.contains(contentType)) throw new AppException(ErrorCode.AUDIO_FORMAT_UNSUPPORTED);
+    String type = baseContentType(audio.getContentType());
+    if (!SUPPORTED.contains(type)) throw new AppException(ErrorCode.AUDIO_FORMAT_UNSUPPORTED);
 
-    final byte[] source;
+    Path input = null;
     try {
-      source = audio.getBytes();
+      // A seekable file is important for WebM recordings without a duration header
+      // and fragmented MP4 produced by Safari. Never use ffprobe on pipe:0 here.
+      input = Files.createTempFile("agendai-voice-", ".input");
+      Files.write(input, audio.getBytes());
+      double duration = probeDuration(input);
+      if (!Double.isFinite(duration) || duration <= 0) {
+        duration = decodedDuration(input);
+      }
+      if (!Double.isFinite(duration) || duration <= 0) {
+        throw new AppException(ErrorCode.AUDIO_FORMAT_UNSUPPORTED);
+      }
+      if (duration > limits.maxAudioSec() + 0.05) throw new AppException(ErrorCode.AUDIO_TOO_LONG);
+
+      ProcessOutput encoded = run("ffmpeg", "-nostdin", "-v", "error", "-i", input.toString(),
+          "-vn", "-ac", "1", "-c:a", "libopus", "-b:a", "32k", "-f", "ogg", "pipe:1");
+      if (encoded.exitCode() != 0 || encoded.stdout().length == 0) {
+        throw new AppException(ErrorCode.AUDIO_FORMAT_UNSUPPORTED);
+      }
+      return new AudioPayload(encoded.stdout(), duration);
     } catch (IOException e) {
       throw new AppException(ErrorCode.AUDIO_FORMAT_UNSUPPORTED);
+    } finally {
+      if (input != null) {
+        try { Files.deleteIfExists(input); } catch (IOException ignored) { }
+      }
     }
-
-    double duration = probeDuration(source);
-    if (!Double.isFinite(duration) || duration <= 0) throw new AppException(ErrorCode.AUDIO_FORMAT_UNSUPPORTED);
-    if (duration > limits.maxAudioSec() + 0.05) throw new AppException(ErrorCode.AUDIO_TOO_LONG);
-
-    byte[] normalized = transcode(source);
-    if (normalized.length == 0) throw new AppException(ErrorCode.AUDIO_FORMAT_UNSUPPORTED);
-    return new AudioPayload(normalized, duration);
   }
 
   private static String baseContentType(String raw) {
@@ -51,53 +68,61 @@ public class FfmpegAudioProcessor implements AudioProcessor {
     return (semicolon >= 0 ? raw.substring(0, semicolon) : raw).strip().toLowerCase(Locale.ROOT);
   }
 
-  private double probeDuration(byte[] source) {
-    Process process = start(
-        "ffprobe", "-v", "error", "-show_entries", "format=duration",
-        "-of", "default=noprint_wrappers=1:nokey=1", "pipe:0");
-    ProcessOutput out = communicate(process, source);
-    if (out.exitCode() != 0) throw new AppException(ErrorCode.AUDIO_FORMAT_UNSUPPORTED);
+  private static double probeDuration(Path input) {
+    ProcessOutput out = run("ffprobe", "-v", "error", "-show_entries", "format=duration",
+        "-of", "default=noprint_wrappers=1:nokey=1", input.toString());
+    if (out.exitCode() != 0) return Double.NaN;
     try {
       return Double.parseDouble(new String(out.stdout(), StandardCharsets.UTF_8).strip());
     } catch (NumberFormatException e) {
-      throw new AppException(ErrorCode.AUDIO_FORMAT_UNSUPPORTED);
+      // WebM recordings frequently report N/A for format duration.
+      return Double.NaN;
     }
   }
 
-  private byte[] transcode(byte[] source) {
-    Process process = start(
-        "ffmpeg", "-v", "error", "-i", "pipe:0", "-vn", "-ac", "1",
-        "-c:a", "libopus", "-b:a", "32k", "-f", "ogg", "pipe:1");
-    ProcessOutput out = communicate(process, source);
-    if (out.exitCode() != 0) throw new AppException(ErrorCode.AUDIO_FORMAT_UNSUPPORTED);
-    return out.stdout();
+  private double decodedDuration(Path input) {
+    // Decode at a fixed sample rate to determine the real audio duration when
+    // container metadata is missing. Decode at most maxAudioSec + 1 seconds:
+    // this keeps the output bounded and still detects overlong recordings.
+    int decodeSeconds = Math.max(1, limits.maxAudioSec() + 1);
+    ProcessOutput out = run("ffmpeg", "-nostdin", "-v", "error", "-i", input.toString(),
+        "-vn", "-t", Integer.toString(decodeSeconds), "-ac", "1", "-ar", "16000",
+        "-f", "s16le", "pipe:1");
+    if (out.exitCode() != 0 || out.stdout().length == 0) return Double.NaN;
+    return out.stdout().length / 32000.0;
   }
 
-  private static Process start(String... command) {
+  private static ProcessOutput run(String... command) {
+    Process process;
     try {
-      return new ProcessBuilder(command).start();
+      process = new ProcessBuilder(command).start();
     } catch (IOException e) {
       throw new IllegalStateException("ffmpeg/ffprobe не установлен в окружении приложения", e);
     }
-  }
-
-  private static ProcessOutput communicate(Process process, byte[] input) {
+    ByteArrayOutputStream stdout = new ByteArrayOutputStream();
+    Thread reader = new Thread(() -> {
+      try (var stream = process.getInputStream()) { stream.transferTo(stdout); }
+      catch (IOException ignored) { }
+    }, "agendai-ffmpeg-output");
+    reader.setDaemon(true);
+    reader.start();
     try {
-      ByteArrayOutputStream stdout = new ByteArrayOutputStream();
-      ByteArrayOutputStream stderr = new ByteArrayOutputStream();
-      Thread outThread = new Thread(() -> copy(process.getInputStream(), stdout), "ffmpeg-stdout");
-      Thread errThread = new Thread(() -> copy(process.getErrorStream(), stderr), "ffmpeg-stderr");
-      outThread.start();
-      errThread.start();
-      try (var stdin = process.getOutputStream()) {
-        stdin.write(input);
-      }
+      // ffmpeg -v error may write diagnostics. Drain stderr to prevent pipe deadlocks,
+      // but never log it: filenames and audio metadata can contain private details.
+      Thread errors = new Thread(() -> {
+        try (var stream = process.getErrorStream()) { stream.transferTo(java.io.OutputStream.nullOutputStream()); }
+        catch (IOException ignored) { }
+      }, "agendai-ffmpeg-errors");
+      errors.setDaemon(true);
+      errors.start();
+      process.getOutputStream().close();
       if (!process.waitFor(PROCESS_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS)) {
         process.destroyForcibly();
+        process.waitFor();
         throw new AppException(ErrorCode.AUDIO_FORMAT_UNSUPPORTED);
       }
-      outThread.join();
-      errThread.join();
+      reader.join();
+      errors.join();
       return new ProcessOutput(process.exitValue(), stdout.toByteArray());
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
@@ -109,13 +134,5 @@ public class FfmpegAudioProcessor implements AudioProcessor {
     }
   }
 
-  private static void copy(java.io.InputStream in, ByteArrayOutputStream out) {
-    try (in) {
-      in.transferTo(out);
-    } catch (IOException ignored) {
-      // The process exit code is the authoritative conversion result.
-    }
-  }
-
-  private record ProcessOutput(int exitCode, byte[] stdout) {}
+  private record ProcessOutput(int exitCode, byte[] stdout) { }
 }

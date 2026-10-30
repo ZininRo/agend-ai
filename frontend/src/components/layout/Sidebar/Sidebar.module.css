@@ -139,3 +139,10 @@
   line-height: 1.35;
   color: var(--color-error, #d44);
 }
+
+/* Larger, accessible hit target for sidebar toggle. */
+.collapse { min-width: 44px; min-height: 44px; align-items: center; justify-content: center; flex-shrink: 0; border-radius: 10px; }
+.collapse:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+.exportRow button { background: linear-gradient(115deg, #a35aff, #7355f5 55%, #4e86ef); border-color: transparent; color: #fff; font-weight: 600; transition: filter 150ms ease, transform 150ms ease; }
+.exportRow button:hover:not(:disabled) { filter: brightness(1.17); transform: translateY(-1px); }
+.exportRow button:focus-visible { outline: 2px solid #c6a5ff; outline-offset: 2px; }

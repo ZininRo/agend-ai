@@ -348,7 +348,28 @@ public class DateResolver {
       first = now.toLocalDate().with(TemporalAdjusters.next(DayOfWeek.MONDAY));
       last = first.plusDays(6);
       from = first.atStartOfDay(zone).toInstant();
+    } else if (s.matches("(?:что у меня )?(?:в |за )?[а-я]+")
+        && monthOf(s.replaceFirst("^(?:что у меня )?(?:в |за )?", "")) != 0) {
+      int month = monthOf(s.replaceFirst("^(?:что у меня )?(?:в |за )?", "").replaceFirst("\\s+.*$", ""));
+      first = LocalDate.of(now.getYear(), month, 1);
+      last = first.with(TemporalAdjusters.lastDayOfMonth());
+      from = first.atStartOfDay(zone).toInstant();
     } else {
+      Matcher natural = Pattern.compile("(?:с\\s+)?(\\d{1,2})\\s+([а-я]+)\\s+(?:по|до)\\s+(\\d{1,2})\\s+([а-я]+)(?:\\s+(\\d{4}))?").matcher(s);
+      if (natural.matches()) {
+        int m1 = monthOf(natural.group(2)), m2 = monthOf(natural.group(4));
+        if (m1 == 0 || m2 == 0) throw new IllegalArgumentException("period");
+        int year = natural.group(5) == null ? now.getYear() : Integer.parseInt(natural.group(5));
+        try {
+          first = LocalDate.of(year, m1, Integer.parseInt(natural.group(1)));
+          last = LocalDate.of(year + (m2 < m1 ? 1 : 0), m2, Integer.parseInt(natural.group(3)));
+        } catch (DateTimeException ex) { throw new IllegalArgumentException("period"); }
+        if (natural.group(5) == null && last.isBefore(now.toLocalDate().minusDays(62))) {
+          first = first.plusYears(1); last = last.plusYears(1);
+        }
+        if (ChronoUnit.DAYS.between(first, last) >= 62 || last.isBefore(first)) throw new IllegalArgumentException("period");
+        return new Period(first.atStartOfDay(zone).toInstant(), last.plusDays(1).atStartOfDay(zone).toInstant(), first, last);
+      }
       Matcher range =
           Pattern.compile(
                   "(?:с )?(\\d{4}-\\d{2}-\\d{2})(?:\\s+(?:по|до)\\s+|/)(\\d{4}-\\d{2}-\\d{2})")

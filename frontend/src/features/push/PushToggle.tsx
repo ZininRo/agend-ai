@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { disablePush, enablePush, pushEnabled, pushSupported } from './push';
+import { disablePush, enablePush, pushEnabled, pushSupported, restorePushSubscription } from './push';
 import styles from './PushToggle.module.css';
 
 type Status = 'checking' | 'enabled' | 'disabled' | 'working';
@@ -17,9 +17,18 @@ export function PushToggle({ collapsed = false }: { collapsed?: boolean }) {
       setStatus('disabled');
       return;
     }
-    void pushEnabled()
-      .then((enabled) => { if (active) setStatus(enabled ? 'enabled' : 'disabled'); })
-      .catch(() => { if (active) setStatus('disabled'); });
+    void (async () => {
+      try {
+        if (Notification.permission === 'granted') await restorePushSubscription();
+        const enabled = await pushEnabled();
+        if (active) setStatus(enabled ? 'enabled' : 'disabled');
+      } catch (e: unknown) {
+        if (active) {
+          setStatus((await pushEnabled().catch(() => false)) ? 'enabled' : 'disabled');
+          setError(e instanceof Error ? e.message : 'Не удалось восстановить подписку');
+        }
+      }
+    })();
     return () => { active = false; };
   }, [supported]);
 
@@ -74,7 +83,7 @@ export function PushToggle({ collapsed = false }: { collapsed?: boolean }) {
           </svg>
         </span>
         {!collapsed && <span className={styles.label}>{busy ? 'Подождите…' : label}</span>}
-        {!collapsed && <span className={`${styles.indicator} ${enabled ? styles.indicatorOn : ''}`} aria-hidden="true" />}
+        {!collapsed && <span className={`${styles.switch} ${enabled ? styles.switchOn : ''}`} aria-hidden="true"><span className={styles.thumb} /></span>}
       </button>
       {!collapsed && hint && <p className={styles.message} role={error ? 'alert' : 'status'}>{hint}</p>}
     </div>

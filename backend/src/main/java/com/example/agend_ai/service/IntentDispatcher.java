@@ -81,8 +81,23 @@ public class IntentDispatcher {
           List.of(),
           false,
           null);
-    // Confirmation replies must be interpreted against the pending operation, not guessed by the LLM.
+    // A complete new command must interrupt an unfinished slot-filling dialog.
+    // Short slot answers such as "сегодня", "завтра", "10:00" and "через два часа"
+    // intentionally do NOT match this predicate and keep using the pending state.
     JsonNode pending = session.getPendingClarification();
+    if (pending != null && isStandaloneCommand(text)) {
+      session.setPendingClarification(null);
+      pending = null;
+    }
+
+    // The basic demo commands must not depend on the LLM. In particular, a bare
+    // "Создай напоминание" starts a deterministic slot-filling flow.
+    if (pending == null) {
+      MessageResponse basic = deterministicBasicCommand(session, request, zone);
+      if (basic != null) return basic;
+    }
+
+    // Confirmation replies must be interpreted against the pending operation, not guessed by the LLM.
     if (pending != null && "confirm_delete".equals(pending.path("kind").asText())) {
       String normalized = text.toLowerCase(Locale.ROOT).replace('ё', 'е').trim();
       if (normalized.matches("(?iu)^(да|ага|подтверждаю|удаляй|удалить|хочу удалить|да,? удаляй)[.! ]*$")
@@ -91,6 +106,23 @@ public class IntentDispatcher {
         reply.put("intent", "clarification_answer");
         reply.put("confidence", 1.0);
         reply.putObject("slots").put("answer", normalized);
+        return clarificationAnswer(session, request, reply, zone);
+      }
+    }
+    // Short answers to slot clarification are deterministic. For create_item we use an
+    // explicit state transition instead of running create() blindly and risking a loop back
+    // to the date question.
+    if (pending != null && "missing_slot".equals(pending.path("kind").asText())
+        && pending.path("awaiting").isArray() && !pending.path("awaiting").isEmpty()) {
+      String awaiting = pending.path("awaiting").get(0).asText();
+      if (Set.of("date", "time", "end_time").contains(awaiting) && text.length() <= 80) {
+        String clarificationText = normalizeClarificationAnswer(text, awaiting);
+        if ("create_item".equals(pending.path("intent").asText()))
+          return continueCreateClarification(session, request, pending, awaiting, clarificationText, zone);
+        var reply = mapper.createObjectNode();
+        reply.put("intent", "clarification_answer");
+        reply.put("confidence", 1.0);
+        reply.putObject("slots").put("answer", clarificationText);
         return clarificationAnswer(session, request, reply, zone);
       }
     }
@@ -140,9 +172,18 @@ public class IntentDispatcher {
         payload = validator.parse(ModelOutputCleaner.clean(generated, mapper));
         break;
       } catch (IllegalArgumentException e) {
-        // Never log model output or parser messages: both can contain user input.
-        log.warn("NLU response rejected (attempt {} of 2; length {} chars)",
-            attempt + 1, generated == null ? 0 : generated.length());
+        // Причину пишем всегда, а сам ответ модели (там может быть текст пользователя) — только в DEBUG.
+        log.warn(
+            "NLU: ответ модели отклонён (попытка {} из 2): {}; длина ответа {} симв.",
+            attempt + 1,
+            e.getMessage(),
+            generated == null ? 0 : generated.length());
+        if (log.isDebugEnabled())
+          log.debug(
+              "NLU: ответ модели: {}",
+              generated == null
+                  ? "null"
+                  : generated.length() <= 1000 ? generated : generated.substring(0, 1000) + "…");
       }
     }
     if (payload == null)
@@ -195,6 +236,152 @@ public class IntentDispatcher {
               false,
               payload);
     };
+  }
+
+  private boolean isStandaloneCommand(String text) {
+    String normalized = text.toLowerCase(Locale.ROOT).replace('ё', 'е')
+        .replaceAll("[.!?]+$", "").replaceAll("\\s+", " ").strip();
+    return normalized.matches("^(?:что|какие|какая|какой|покажи|покажи мне|выведи|найди|поиск|ищи)\\b.*")
+        || normalized.matches("^(?:создай|добавь|поставь|назначь|напомни)\\b.*")
+        || normalized.matches("^(?:удали|удалить|отмени|отменить|перенеси|перенести|измени|изменить|поменяй|обнови|заверши|выполни|отметь)\\b.*");
+  }
+
+  private MessageResponse deterministicBasicCommand(
+      ChatSession session, MessageRequest request, ZoneId zone) {
+    String normalized = request.text().toLowerCase(Locale.ROOT).replace('ё', 'е')
+        .replaceAll("[.!?]+$", "").replaceAll("\\s+", " ").strip();
+
+    if (normalized.equals("что ты умеешь") || normalized.equals("что умеешь"))
+      return finish(
+          session, request, "info", "unknown",
+          "Я умею создавать задачи, встречи и напоминания, показывать планы на сегодня, завтра и другие периоды, искать записи, переносить их, менять статус и удалять.",
+          List.of(), false, null);
+
+    String type = null;
+    String title = null;
+    if (normalized.matches("^(?:создай|добавь|поставь) напоминание$")) {
+      type = "reminder";
+      title = "Напоминание";
+    } else if (normalized.matches("^(?:создай|добавь) задачу$")) {
+      type = "task";
+      title = "Задача";
+    } else if (normalized.matches("^(?:создай|добавь|назначь) встречу$")) {
+      type = "meeting";
+      title = "Встреча";
+    }
+    if (type == null) return null;
+
+    var command = mapper.createObjectNode();
+    command.put("intent", "create_item");
+    command.put("confidence", 1.0);
+    var slots = command.putObject("slots");
+    slots.put("item_type", type);
+    slots.put("title", title);
+    return create(session, request, command, zone);
+  }
+
+  private MessageResponse continueCreateClarification(
+      ChatSession session,
+      MessageRequest request,
+      JsonNode pending,
+      String awaiting,
+      String rawAnswer,
+      ZoneId zone) {
+    String answer = rawAnswer == null ? "" : rawAnswer.strip();
+    if (answer.isEmpty())
+      return finish(session, request, "clarification", "create_item",
+          "Уточните ответ, пожалуйста.", List.of(), false, null);
+
+    var slots = pending.path("draft").isObject()
+        ? (com.fasterxml.jackson.databind.node.ObjectNode) pending.path("draft").deepCopy()
+        : mapper.createObjectNode();
+    String typeText = slot(slots, "item_type");
+    ItemType type = null;
+    if (typeText != null) {
+      try { type = ItemType.valueOf(typeText.toUpperCase(Locale.ROOT)); }
+      catch (IllegalArgumentException ignored) { }
+    }
+
+    if ("date".equals(awaiting)) {
+      // Validate only the date here. A reminder/meeting without time is intentionally
+      // incomplete, but the date itself is already valid and must be preserved.
+      DateResolver.ResolvedDateTime dateCheck = dates.resolve(answer, null, zone, null);
+      String reason = dateCheck.reason();
+      if (dateCheck.needsDateClarification() && !dateCheck.needsTimeClarification()) {
+        String question = switch (reason == null ? "" : reason) {
+          case "ambiguous_date" -> "Уточните дату: сегодня или следующий такой день?";
+          case "past" -> "Эта дата уже прошла. Назовите будущую дату.";
+          default -> "Не понял дату. Скажите, например: сегодня, завтра, послезавтра или 5 ноября.";
+        };
+        return finish(session, request, "clarification", "create_item", question, List.of(), false, null);
+      }
+      slots.put("date_expr", answer);
+
+      if (type == ItemType.REMINDER || type == ItemType.MEETING) {
+        setMissingSlotPending(session, "create_item", slots, "time");
+        return finish(
+            session, request, "clarification", "create_item",
+            type == ItemType.MEETING
+                ? "На какое время поставить встречу?"
+                : "На какое время поставить напоминание?",
+            List.of(), false, null);
+      }
+      return resumeCreate(session, request, slots, zone);
+    }
+
+    if ("time".equals(awaiting)) {
+      slots.put("time_expr", answer);
+      // Pre-validate the complete date/time so malformed time never turns into another
+      // date question. Relative expressions ("через два часа") are supported too.
+      DateResolver.ResolvedDateTime check =
+          dates.resolve(slot(slots, "date_expr"), answer, zone, null);
+      if (check.startAt() == null) {
+        setMissingSlotPending(session, "create_item", slots, "time");
+        return finish(
+            session, request, "clarification", "create_item",
+            "Не понял время. Скажите, например: в 15:00, в три часа или через два часа.",
+            List.of(), false, null);
+      }
+      return resumeCreate(session, request, slots, zone);
+    }
+
+    if ("end_time".equals(awaiting)) {
+      slots.put("end_time_expr", answer);
+      return resumeCreate(session, request, slots, zone);
+    }
+
+    return resumeCreate(session, request, slots, zone);
+  }
+
+  private MessageResponse resumeCreate(
+      ChatSession session, MessageRequest request, JsonNode slots, ZoneId zone) {
+    var command = mapper.createObjectNode();
+    command.put("intent", "create_item");
+    command.put("confidence", 1.0);
+    command.set("slots", slots.deepCopy());
+    session.setPendingClarification(null);
+    return create(session, request, command, zone);
+  }
+
+  private void setMissingSlotPending(
+      ChatSession session, String intent, JsonNode draft, String awaiting) {
+    var node = mapper.createObjectNode();
+    node.put("kind", "missing_slot");
+    node.put("intent", intent);
+    node.set("draft", draft.deepCopy());
+    node.set("awaiting", mapper.valueToTree(List.of(awaiting)));
+    node.put("created_at", clock.instant().toString());
+    session.setPendingClarification(node);
+  }
+
+  private static String normalizeClarificationAnswer(String raw, String awaiting) {
+    String value = raw.strip();
+    if (!"time".equals(awaiting) && !"end_time".equals(awaiting)) return value;
+    // Tolerate common compact/typing variants in relative time answers.
+    return value
+        .replaceAll("(?iu)\\bчерез\\s+двчаса\\b", "через два часа")
+        .replaceAll("(?iu)\\bчерез\\s+двачаса\\b", "через два часа")
+        .replaceAll("(?iu)(\\d)(час(?:а|ов)?|минут(?:у|ы)?)\\b", "$1 $2");
   }
 
   /** «позвонить Ивану» → «Позвонить Ивану»; для встречи «с командой» → «Встреча с командой». */
@@ -281,9 +468,7 @@ public class IntentDispatcher {
     item.setUser(users.getReferenceById(DefaultUser.ID));
     item.setType(type);
     item.setTitle(title);
-    String description = slot(slots, "description");
-    String originalText = slot(slots, "original_request_text");
-    item.setDescription(description != null ? description : (originalText != null ? originalText : request.text()));
+    item.setDescription(request.text());
     item.setPlace(slot(slots, "place"));
     if (type == ItemType.TASK) item.setDueAt(resolved.dueAt());
     else item.setStartAt(resolved.startAt());
@@ -383,7 +568,7 @@ public class IntentDispatcher {
                 "intent",
                 payload.get("intent").asText(),
                 "draft",
-                draftWithOriginalText(payload, request.text()),
+                payload.get("slots"),
                 "awaiting",
                 List.of(awaiting),
                 "created_at",
@@ -397,14 +582,6 @@ public class IntentDispatcher {
         List.of(),
         false,
         payload);
-  }
-
-  private JsonNode draftWithOriginalText(JsonNode payload, String originalText) {
-    com.fasterxml.jackson.databind.node.ObjectNode draft = payload.path("slots").isObject()
-        ? (com.fasterxml.jackson.databind.node.ObjectNode) payload.path("slots").deepCopy()
-        : mapper.createObjectNode();
-    if (!draft.hasNonNull("original_request_text")) draft.put("original_request_text", originalText);
-    return draft;
   }
 
   private boolean pendingExpired(JsonNode pending) {
@@ -428,7 +605,7 @@ public class IntentDispatcher {
     Map<String, Object> pending = new LinkedHashMap<>();
     pending.put("kind", "conflict");
     pending.put("intent", payload.get("intent").asText());
-    pending.put("draft", draftWithOriginalText(payload, request.text()));
+    pending.put("draft", payload.get("slots"));
     pending.put("awaiting", List.of("decision"));
     pending.put("conflict_item_id", conflict.getId());
     pending.put("created_at", clock.instant().toString());
