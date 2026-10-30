@@ -60,14 +60,4 @@ public interface ItemRepository extends JpaRepository<Item, UUID> {
                                     @Param("status") ItemStatus status,
                                     @Param("type") ItemType type);
 
-    @Query("""
-            select i from Item i
-            where i.user.id = :userId
-              and i.deletedAt is null
-              and lower(i.title) like lower(concat('%', :query, '%'))
-            order by i.updatedAt desc
-            """)
-    List<Item> findByTitleQuery(@Param("userId") UUID userId,
-                                @Param("query") String query,
-                                org.springframework.data.domain.Pageable pageable);
 }

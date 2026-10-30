@@ -103,3 +103,39 @@
     box-shadow: 8px 0 24px rgba(0, 0, 0, 0.5);
   }
 }
+
+
+.exportRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 4px 8px 10px 12px;
+}
+
+.exportRow button {
+  min-width: 0;
+  padding: 8px 6px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+}
+
+.exportRow button:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.exportRow button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.exportError {
+  margin: 0 12px 10px;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--color-error, #d44);
+}

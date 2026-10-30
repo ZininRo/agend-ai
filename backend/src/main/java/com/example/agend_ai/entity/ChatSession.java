@@ -2,6 +2,7 @@ package com.example.agend_ai.entity;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import jakarta.persistence.*;
+import com.example.agend_ai.crypto.EncryptedJsonConverter;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -29,7 +30,7 @@ public class ChatSession extends BaseEntity {
     @JoinColumn(name = "last_item_id")
     private Item lastItem;
 
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "pending_clarification", columnDefinition = "JSONB")
+    @Convert(converter = EncryptedJsonConverter.class)
+    @Column(name = "pending_clarification", columnDefinition = "TEXT")
     private JsonNode pendingClarification;
 }

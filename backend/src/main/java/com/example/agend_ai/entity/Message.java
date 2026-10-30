@@ -4,6 +4,8 @@ import com.example.agend_ai.entity.enums.MessageInputType;
 import com.example.agend_ai.entity.enums.MessageRole;
 import com.fasterxml.jackson.databind.JsonNode;
 import jakarta.persistence.*;
+import com.example.agend_ai.crypto.EncryptedStringConverter;
+import com.example.agend_ai.crypto.EncryptedJsonConverter;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -36,6 +38,7 @@ public class Message extends BaseEntity {
     private MessageRole role;
 
     @Column(name = "content", nullable = false, columnDefinition = "TEXT")
+    @Convert(converter = EncryptedStringConverter.class)
     private String content;
 
     @Enumerated(EnumType.STRING)
@@ -54,13 +57,13 @@ public class Message extends BaseEntity {
     private UUID clientMessageId;
 
     /** JSON, который вернул LLM (для отладки/аналитики). */
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "intent_payload", columnDefinition = "JSONB")
+    @Convert(converter = EncryptedJsonConverter.class)
+    @Column(name = "intent_payload", columnDefinition = "TEXT")
     private JsonNode intentPayload;
 
     /** Сохранённый ответ API (идемпотентность по client_message_id). */
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "response_json", columnDefinition = "JSONB")
+    @Convert(converter = EncryptedJsonConverter.class)
+    @Column(name = "response_json", columnDefinition = "TEXT")
     private JsonNode responseJson;
 
     @Column(name = "timezone", nullable = false, length = 64)

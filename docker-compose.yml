@@ -22,6 +22,7 @@ services:
         condition: service_healthy
     environment:
       DB_URL: jdbc:postgresql://db:5432/agendai
+      DATA_ENCRYPTION_KEY: ${DATA_ENCRYPTION_KEY:?Set DATA_ENCRYPTION_KEY in .env}
       DB_USER: ${DB_USER:-agendai}
       DB_PASSWORD: ${DB_PASSWORD:-agendai}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173}

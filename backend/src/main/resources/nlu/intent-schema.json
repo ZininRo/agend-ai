@@ -43,6 +43,7 @@
             null
           ]
         },
+        "description": {"type": ["string", "null"], "maxLength": 1000, "minLength": 1},
         "title": {
           "type": [
             "string",

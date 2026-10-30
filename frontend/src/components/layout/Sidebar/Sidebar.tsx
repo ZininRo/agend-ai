@@ -12,6 +12,7 @@ import { formatMonthLabel } from '../../../features/records/format';
 import type { RecordKind } from '../../../features/records/types';
 import { useMonth } from '../../../features/records/useMonth';
 import { useRecords } from '../../../features/records/useRecords';
+import { exportRecords, type ExportFormat } from '../../../features/records/api';
 import { MonthPicker } from './MonthPicker';
 import { NavItem } from './NavItem';
 import { RecordsSection } from './RecordsSection';
@@ -41,6 +42,8 @@ export function Sidebar({ collapsed, onToggleCollapsed }: Props) {
   });
   const { month, select } = useMonth();
   const { records, status, error, reload } = useRecords(month);
+  const [exporting, setExporting] = useState<ExportFormat | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   // Текст ошибки сервера про «сохранение данных» к чтению не подходит, поэтому для сбоев
   // самого сервера пишем свой текст; про отсутствие сети — готовый текст из ApiError.
@@ -57,6 +60,19 @@ export function Sidebar({ collapsed, onToggleCollapsed }: Props) {
   const expandRecords = () => {
     onToggleCollapsed();
     setRecordsOpen(true);
+  };
+
+  const downloadExport = async (format: ExportFormat) => {
+    if (exporting) return;
+    setExportError(null);
+    setExporting(format);
+    try {
+      await exportRecords(month, format);
+    } catch (error) {
+      setExportError(error instanceof Error ? error.message : 'Не удалось экспортировать записи.');
+    } finally {
+      setExporting(null);
+    }
   };
 
   return (
@@ -90,6 +106,15 @@ export function Sidebar({ collapsed, onToggleCollapsed }: Props) {
             />
             <Collapsible open={recordsOpen}>
               <MonthPicker label={formatMonthLabel(month)} value={month} onSelect={select} />
+              <div className={styles.exportRow} aria-label="Экспорт записей выбранного месяца">
+                <button type="button" onClick={() => void downloadExport('csv')} disabled={exporting !== null}>
+                  {exporting === 'csv' ? 'Экспорт…' : 'Excel / CSV'}
+                </button>
+                <button type="button" onClick={() => void downloadExport('ics')} disabled={exporting !== null}>
+                  {exporting === 'ics' ? 'Экспорт…' : 'Календарь / ICS'}
+                </button>
+              </div>
+              {exportError && <p className={styles.exportError} role="alert">{exportError}</p>}
               {status === 'error' && <RecordsStatus message={loadError} onRetry={reload} />}
               {RECORD_SECTIONS.map((section) => (
                 <RecordsSection

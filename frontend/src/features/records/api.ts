@@ -3,6 +3,7 @@ import { request } from '../../api/http';
 import type { ItemDto, ItemType, ItemStatus, ItemsResponseDto } from '../../api/types';
 import type { Month, RecordItem, RecordKind } from './types';
 import { getTimezone } from '../../api/session';
+import { API_BASE } from '../../api/env';
 
 // Типы записей соответствуют ItemType backend.
 const KIND_BY_TYPE: Record<ItemType, RecordKind> = {
@@ -14,7 +15,7 @@ const KIND_BY_TYPE: Record<ItemType, RecordKind> = {
 const pad = (n: number) => String(n).padStart(2, '0');
 
 /** Первый и последний день месяца в формате YYYY-MM-DD (оба включительно, как ждёт бэкенд). */
-function monthRange({ year, month }: Month) {
+export function monthRange({ year, month }: Month) {
   const lastDay = new Date(year, month + 1, 0).getDate();
   const prefix = `${year}-${pad(month + 1)}`;
   return { from: `${prefix}-01`, to: `${prefix}-${pad(lastDay)}` };
@@ -72,4 +73,25 @@ export async function updateRecord(id: string, changes: {
     method: 'PATCH', query: { timezone: getTimezone() }, json: { title: changes.title, description: changes.description, place: changes.place,
       start_at: changes.startAt, end_at: changes.endAt, due_at: changes.dueAt, status: changes.status },
   });
+}
+
+
+export type ExportFormat = 'csv' | 'ics';
+
+/** Скачивает записи выбранного месяца: CSV для Excel/таблиц или ICS для календаря. */
+export async function exportRecords(month: Month, format: ExportFormat): Promise<void> {
+  const { from, to } = monthRange(month);
+  const params = new URLSearchParams({ from, to, timezone: getTimezone(), format });
+  const response = await fetch(`${API_BASE}/api/items/export?${params.toString()}`);
+  if (!response.ok) throw new Error('Не удалось экспортировать записи. Попробуйте ещё раз.');
+
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = format === 'csv' ? `agendai-${from}-${to}.csv` : `agendai-${from}-${to}.ics`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }

@@ -290,7 +290,9 @@ public class IntentDispatcher {
     item.setUser(users.getReferenceById(DefaultUser.ID));
     item.setType(type);
     item.setTitle(title);
-    item.setDescription(request.text());
+    String description = slot(slots, "description");
+    String originalText = slot(slots, "original_request_text");
+    item.setDescription(description != null ? description : (originalText != null ? originalText : request.text()));
     item.setPlace(slot(slots, "place"));
     if (type == ItemType.TASK) item.setDueAt(resolved.dueAt());
     else item.setStartAt(resolved.startAt());
@@ -390,7 +392,7 @@ public class IntentDispatcher {
                 "intent",
                 payload.get("intent").asText(),
                 "draft",
-                payload.get("slots"),
+                draftWithOriginalText(payload, request.text()),
                 "awaiting",
                 List.of(awaiting),
                 "created_at",
@@ -404,6 +406,14 @@ public class IntentDispatcher {
         List.of(),
         false,
         payload);
+  }
+
+  private JsonNode draftWithOriginalText(JsonNode payload, String originalText) {
+    com.fasterxml.jackson.databind.node.ObjectNode draft = payload.path("slots").isObject()
+        ? (com.fasterxml.jackson.databind.node.ObjectNode) payload.path("slots").deepCopy()
+        : mapper.createObjectNode();
+    if (!draft.hasNonNull("original_request_text")) draft.put("original_request_text", originalText);
+    return draft;
   }
 
   private boolean pendingExpired(JsonNode pending) {
@@ -427,7 +437,7 @@ public class IntentDispatcher {
     Map<String, Object> pending = new LinkedHashMap<>();
     pending.put("kind", "conflict");
     pending.put("intent", payload.get("intent").asText());
-    pending.put("draft", payload.get("slots"));
+    pending.put("draft", draftWithOriginalText(payload, request.text()));
     pending.put("awaiting", List.of("decision"));
     pending.put("conflict_item_id", conflict.getId());
     pending.put("created_at", clock.instant().toString());
