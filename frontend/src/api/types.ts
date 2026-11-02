@@ -47,3 +47,31 @@ export type MessageResponseDto = {
   data_changed: boolean;
   quick_replies: string[];
 };
+
+
+/** GET /api/history */
+export type HistoryMessageDto = {
+  id: string;
+  role: 'user' | 'assistant';
+  text: string;
+  created_at: string;
+  item: ItemDto | null;
+};
+
+export type HistoryResponseDto = {
+  messages: HistoryMessageDto[];
+};
+
+export type AuthUserDto = {
+  id: string;
+  email: string | null;
+  display_name: string | null;
+  timezone: string;
+};
+
+export type AuthResponseDto = {
+  access_token: string;
+  token_type: 'Bearer';
+  expires_in: number;
+  user: AuthUserDto;
+};

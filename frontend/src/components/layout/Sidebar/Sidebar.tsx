@@ -134,7 +134,7 @@ export function Sidebar({ collapsed, onToggleCollapsed }: Props) {
 
       <footer className={styles.footer}>
         <PushToggle collapsed={collapsed} />
-        <UserMenu name="Пользователь" collapsed={collapsed} />
+        <UserMenu collapsed={collapsed} />
       </footer>
     </aside>
   );

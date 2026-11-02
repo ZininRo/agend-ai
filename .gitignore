@@ -105,3 +105,7 @@ log/
 node_modules/
 # Local PostgreSQL backups (sensitive)
 /backups/
+
+# NLU evaluation runs contain raw model responses; compact baseline may be versioned.
+/nlu-evaluation/reports/*
+!/nlu-evaluation/reports/baseline.json

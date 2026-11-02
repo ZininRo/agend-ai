@@ -1,7 +1,6 @@
 package com.example.agend_ai.service;
 
 import com.example.agend_ai.entity.Item;
-import com.example.agend_ai.common.DefaultUser;
 import com.example.agend_ai.repository.ItemRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -12,13 +11,12 @@ import java.util.*;
 public class ItemSearchService {
     private final ItemRepository items;
     public record Candidate(Item item, double score) {}
-    public List<Candidate> search(String rawQuery, int limit) {
+    public List<Candidate> search(UUID userId, String rawQuery, int limit) {
         String query = normalize(rawQuery);
         if (query.isBlank()) return List.of();
         List<Candidate> found = new ArrayList<>();
-        for (Item item : items.findAll()) {
-            if (item.getDeletedAt() != null || item.getUser() == null
-                    || !DefaultUser.ID.equals(item.getUser().getId())) continue;
+        for (Item item : items.findAllActiveByUserId(userId)) {
+            if (item.getUser() == null || !userId.equals(item.getUser().getId())) continue;
             String title = normalize(item.getTitle());
             String description = normalize(item.getDescription());
             double score = title.equals(query) ? 1.0 : title.contains(query) ? 0.85 : description.contains(query) ? 0.70 : 0;

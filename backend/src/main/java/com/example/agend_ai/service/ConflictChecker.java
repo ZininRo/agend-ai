@@ -1,6 +1,5 @@
 package com.example.agend_ai.service;
 
-import com.example.agend_ai.common.DefaultUser;
 import com.example.agend_ai.config.AppProperties;
 import com.example.agend_ai.entity.Item;
 import com.example.agend_ai.entity.enums.ItemStatus;
@@ -31,7 +30,7 @@ public class ConflictChecker {
     Instant defaultWindowStart = start.minus(Duration.ofMinutes(app.meeting().defaultDurationMin()));
 
     return items.findMeetingConflicts(
-            DefaultUser.ID, start, end, defaultWindowStart, excludeId == null ? new UUID(0L, 0L) : excludeId, ItemStatus.TODO, ItemType.MEETING)
+            candidate.getUser().getId(), start, end, defaultWindowStart, excludeId == null ? new UUID(0L, 0L) : excludeId, ItemStatus.TODO, ItemType.MEETING)
         .stream()
         .findFirst();
   }

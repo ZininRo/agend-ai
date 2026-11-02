@@ -43,7 +43,14 @@
             null
           ]
         },
-        "description": {"type": ["string", "null"], "maxLength": 1000, "minLength": 1},
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 1000,
+          "minLength": 1
+        },
         "title": {
           "type": [
             "string",
@@ -166,6 +173,18 @@
           ],
           "maxLength": 255,
           "minLength": 1
+        },
+        "new_status": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "TODO",
+            "DONE",
+            "CANCELLED",
+            null
+          ]
         }
       }
     }

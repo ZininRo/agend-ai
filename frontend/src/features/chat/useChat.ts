@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { toApiError, type ApiError } from '../../api/ApiError';
 import { uuid } from '../../api/session';
 import { notifyRecordsChanged } from '../records/recordsEvents';
-import { sendMessage, transcribeAudio } from './api';
+import { fetchHistory, sendMessage, transcribeAudio } from './api';
 import { MAX_TEXT_CHARS } from './constants';
 import type { Message, MessageAction, Recording, SendRequest, VoiceStatus } from './types';
 import { useRecorder } from './useRecorder';
@@ -56,6 +56,22 @@ export function useChat() {
   const lastRecordingRef = useRef<Recording | null>(null);
   const startRecordingRef = useRef<() => void>(() => undefined);
   const speech = useSpeech();
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchHistory()
+      .then((history) => {
+        if (cancelled || history.length === 0) return;
+        // Не затираем реплики, если пользователь успел начать новый диалог до ответа history.
+        setMessages((current) => (current.length === 0 ? history : current));
+      })
+      .catch(() => {
+        // История — восстановление UX, а не критичный путь: новый чат должен остаться рабочим.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const focusInputAtEnd = () => {
     // Ждём кадр: к этому времени React уже вставил текст в поле

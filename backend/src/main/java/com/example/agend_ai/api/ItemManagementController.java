@@ -3,7 +3,7 @@ package com.example.agend_ai.api;
 import com.example.agend_ai.api.dto.ItemDto;
 import com.example.agend_ai.api.error.AppException;
 import com.example.agend_ai.api.error.ErrorCode;
-import com.example.agend_ai.common.DefaultUser;
+import com.example.agend_ai.security.CurrentUser;
 import com.example.agend_ai.entity.Item;
 import com.example.agend_ai.entity.enums.ItemStatus;
 import com.example.agend_ai.repository.ItemRepository;
@@ -27,12 +27,12 @@ public class ItemManagementController {
     private final ItemRepository repository;
     private final ZoneResolver zones;
     private final JdbcTemplate jdbc;
+    private final CurrentUser currentUser;
 
     public record StatusUpdate(String status) {}
 
     private Item find(UUID id) {
-        return repository.findById(id)
-                .filter(i -> i.getUser().getId().equals(DefaultUser.ID) && i.getDeletedAt() == null)
+        return repository.findActiveByIdAndUserId(id, currentUser.id())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Запись не найдена"));
     }
 

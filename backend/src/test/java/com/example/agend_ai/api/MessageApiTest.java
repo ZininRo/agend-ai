@@ -3,6 +3,7 @@ package com.example.agend_ai.api;
 import static com.github.tomakehurst.wiremock.client.WireMock.*;
 import static org.assertj.core.api.Assertions.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 import com.example.agend_ai.common.DefaultUser;
@@ -108,6 +109,7 @@ class MessageApiTest extends DatabaseTestSupport {
   ResultActions sendBody(Map<String, Object> data) throws Exception {
     return mvc.perform(
         post("/api/message")
+            .with(user(DefaultUser.ID.toString()))
             .contentType(MediaType.APPLICATION_JSON)
             .content(mapper.writeValueAsBytes(data)));
   }

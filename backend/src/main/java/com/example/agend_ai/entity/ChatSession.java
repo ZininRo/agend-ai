@@ -16,7 +16,7 @@ import java.util.UUID;
 @Setter
 @NoArgsConstructor
 @Entity
-@Table(name = "sessions")
+@Table(name = "chat_sessions")
 public class ChatSession extends BaseEntity {
 
     @Id

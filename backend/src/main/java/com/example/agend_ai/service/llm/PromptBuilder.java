@@ -1,22 +1,14 @@
 package com.example.agend_ai.service.llm;
 
-import com.example.agend_ai.config.AppProperties;
-import com.example.agend_ai.entity.ChatSession;
-import com.example.agend_ai.repository.MessageRepository;
-import com.fasterxml.jackson.databind.JsonNode;
+import com.example.agend_ai.service.nlu.NluContext;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.time.*;
-import java.time.format.DateTimeParseException;
 import java.util.*;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
 
 @Component
 @RequiredArgsConstructor
 public class PromptBuilder {
-  private final AppProperties app;
-  private final MessageRepository messages;
   private final ObjectMapper mapper;
 
   public String system() {
@@ -70,59 +62,23 @@ item_ref=last — если пользователь говорит «её», «�
 """;
   }
 
-  public String data(ChatSession session, String text, ZoneId zone, Instant now) {
+  public String data(NluContext context) {
     Map<String, Object> data = new LinkedHashMap<>();
-    data.put("now", now.atZone(zone).toString());
-    data.put("weekday", now.atZone(zone).getDayOfWeek().toString());
-    data.put("timezone", zone.getId());
-    data.put("text", text);
-    var recent =
-        new ArrayList<>(
-            messages.context(
-                session.getId(), PageRequest.of(0, Math.max(1, app.context().maxMessages()))));
-    Collections.reverse(recent);
+    data.put("now", context.now().atZone(context.zone()).toString());
+    data.put("weekday", context.now().atZone(context.zone()).getDayOfWeek().toString());
+    data.put("timezone", context.zone().getId());
+    data.put("text", context.text());
     data.put(
         "history",
-        recent.stream()
-            .map(m -> Map.of("role", m.getRole().name(), "text", m.getContent()))
+        context.history().stream()
+            .map(m -> Map.of("role", m.role(), "text", m.text()))
             .toList());
-    // The referenced item may have been deleted after the session was created.
-    // A dangling LAZY proxy must never break every subsequent chat request.
-    Map<String, Object> lastItem = null;
-    if (session.getLastItem() != null) {
-      try {
-        var item = session.getLastItem();
-        Map<String, Object> snapshot = new LinkedHashMap<>();
-        snapshot.put("id", item.getId());
-        snapshot.put("type", item.getType());
-        snapshot.put("title", item.getTitle());
-        snapshot.put("status", item.getStatus());
-        snapshot.put("time", String.valueOf(
-            item.getStartAt() != null ? item.getStartAt() : item.getDueAt()));
-        lastItem = snapshot;
-      } catch (jakarta.persistence.EntityNotFoundException missingItem) {
-        // Clear the stale FK as part of the enclosing transaction.
-        session.setLastItem(null);
-      }
-    }
-    data.put("last_item", lastItem);
-    var pending = session.getPendingClarification();
-    if (pending != null && expired(pending, now)) pending = null;
-    data.put("pending", pending);
+    data.put("last_item", context.lastItem());
+    data.put("pending", context.pending());
     try {
       return mapper.writeValueAsString(data);
     } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
       throw new IllegalStateException("Cannot build NLU input");
-    }
-  }
-
-  /** Ожидание старше app.pending.ttl-min (или с повреждённой датой) в LLM не передаём. */
-  private boolean expired(JsonNode pending, Instant now) {
-    try {
-      Instant created = Instant.parse(pending.path("created_at").asText());
-      return now.minusSeconds(app.pending().ttlMin() * 60L).isAfter(created);
-    } catch (DateTimeParseException e) {
-      return true;
     }
   }
 }

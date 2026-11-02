@@ -1,8 +1,8 @@
 import { ApiError } from '../../api/ApiError';
 import { request } from '../../api/http';
 import { getSessionId, getTimezone } from '../../api/session';
-import type { MessageResponseDto, VoiceResponseDto } from '../../api/types';
-import type { AssistantReply, Recording, SendRequest, Transcription } from './types';
+import type { HistoryResponseDto, MessageResponseDto, VoiceResponseDto } from '../../api/types';
+import type { AssistantReply, Message, Recording, SendRequest, Transcription } from './types';
 
 // Запросы чата к настоящему бэкенду:
 //   transcribeAudio → POST /api/voice   (multipart: audio + session_id)
@@ -42,6 +42,23 @@ export async function transcribeAudio(recording: Recording): Promise<Transcripti
     text: data.text ?? '',
     assistantMessage: data.assistant_message ?? null,
   };
+}
+
+
+
+/** История текущей вкладки. Ошибка загрузки истории не блокирует новый диалог. */
+export async function fetchHistory(limit = 200): Promise<Message[]> {
+  const data = await request<HistoryResponseDto>('/api/history', {
+    query: {
+      session_id: getSessionId(),
+      limit: String(limit),
+    },
+  });
+  return data.messages.map((message) => ({
+    id: message.id,
+    role: message.role,
+    text: message.text,
+  }));
 }
 
 /** Ответ ассистента на сообщение. */

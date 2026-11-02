@@ -14,13 +14,14 @@ public interface ChatSessionRepository extends JpaRepository<ChatSession, UUID> 
 
   /** Блокировка строки сессии на время обработки /api/message (фаза 4). */
   @Lock(LockModeType.PESSIMISTIC_WRITE)
-  @Query("select s from ChatSession s where s.id = :id")
-  Optional<ChatSession> findByIdForUpdate(@Param("id") UUID id);
+  @Query("select s from ChatSession s where s.id = :id and s.user.id = :userId")
+  Optional<ChatSession> findByIdAndUserIdForUpdate(
+      @Param("id") UUID id, @Param("userId") UUID userId);
 
   @Modifying
   @Query(
       value =
-          "insert into sessions (id,user_id,created_at,updated_at) values (:id,:userId,now(),now())"
+          "insert into chat_sessions (id,user_id,created_at,updated_at) values (:id,:userId,now(),now())"
               + " on conflict (id) do nothing",
       nativeQuery = true)
   void ensure(@Param("id") UUID id, @Param("userId") UUID userId);

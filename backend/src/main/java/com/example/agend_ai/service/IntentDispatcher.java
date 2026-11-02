@@ -2,41 +2,39 @@ package com.example.agend_ai.service;
 
 import com.example.agend_ai.api.dto.*;
 import com.example.agend_ai.api.error.*;
-import com.example.agend_ai.common.DefaultUser;
 import com.example.agend_ai.config.LimitsProperties;
 import com.example.agend_ai.entity.*;
 import com.example.agend_ai.entity.enums.*;
 import com.example.agend_ai.repository.*;
+import com.example.agend_ai.security.CurrentUser;
 import com.example.agend_ai.service.llm.*;
+import com.example.agend_ai.service.nlu.NluService;
 import com.fasterxml.jackson.databind.*;
 import java.time.*;
 import java.util.*;
 import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
-@Slf4j
 @RequiredArgsConstructor
 public class IntentDispatcher {
-  private final LlmClient llmClient;
-  private final IntentValidator validator;
-  private final PromptBuilder prompts;
+  private final NluService nlu;
   private final DateResolver dates;
   private final ResponseComposer composer;
   private final ConflictChecker conflicts;
   private final ItemSearchService search;
-  private final com.example.agend_ai.config.AppProperties app;
   private final ZoneResolver zones;
   private final LimitsProperties limits;
   private final Clock clock;
   private final ChatSessionRepository sessions;
   private final ItemRepository items;
   private final MessageRepository messages;
-  private final UserRepository users;
   private final ObjectMapper mapper;
+  private final CurrentUser currentUser;
+  private final ClarificationService clarifications;
+  private final TargetResolver targets;
   // Относительное смещение существующей записи, а не время от текущего момента.
   private static final Pattern TIME_SHIFT = Pattern.compile(
       "(?iu)(?:на\\s+)?(\\d{1,5})\\s*(минут(?:у|ы)?|мин|час(?:а|ов)?|ч)\\s*(позже|раньше|впер[её]д|назад)");
@@ -61,13 +59,16 @@ public class IntentDispatcher {
         new MessageRequest(
             raw.sessionId(), text, zone.getId(), raw.source(), raw.clientMessageId());
     // Atomic creation + row lock also serializes first requests for an unknown session.
-    sessions.ensure(request.sessionId(), DefaultUser.ID);
-    ChatSession session = sessions.findByIdForUpdate(request.sessionId()).orElseThrow();
-    if (session.getPendingClarification() != null && pendingExpired(session.getPendingClarification()))
-      session.setPendingClarification(null);
+    UUID userId = currentUser.id();
+    sessions.ensure(request.sessionId(), userId);
+    ChatSession session =
+        sessions
+            .findByIdAndUserIdForUpdate(request.sessionId(), userId)
+            .orElseThrow(() -> new AppException(ErrorCode.REQUEST_INVALID));
+    clarifications.clearExpired(session);
     if (request.clientMessageId() != null) {
       var previous =
-          messages.findBySessionIdAndClientMessageId(session.getId(), request.clientMessageId());
+          messages.findBySessionIdAndUserIdAndClientMessageId(session.getId(), userId, request.clientMessageId());
       if (previous.isPresent() && previous.get().getResponseJson() != null)
         return mapper.convertValue(previous.get().getResponseJson(), MessageResponse.class);
     }
@@ -157,35 +158,7 @@ public class IntentDispatcher {
         return update(session, request, command, zone);
       }
     }
-    JsonNode payload = null;
-    String data = prompts.data(session, text, zone, clock.instant());
-    for (int attempt = 0; attempt < 2; attempt++) {
-      String generated =
-          llmClient.generateStructuredJson(
-              prompts.system()
-                  + (attempt == 0
-                      ? ""
-                      : "\nПредыдущий ответ нарушил схему. Верни корректный JSON."),
-              data);
-      try {
-        // Модель может обернуть JSON в ```json …``` или вернуть пустой слот ""; убираем это до проверки.
-        payload = validator.parse(ModelOutputCleaner.clean(generated, mapper));
-        break;
-      } catch (IllegalArgumentException e) {
-        // Причину пишем всегда, а сам ответ модели (там может быть текст пользователя) — только в DEBUG.
-        log.warn(
-            "NLU: ответ модели отклонён (попытка {} из 2): {}; длина ответа {} симв.",
-            attempt + 1,
-            e.getMessage(),
-            generated == null ? 0 : generated.length());
-        if (log.isDebugEnabled())
-          log.debug(
-              "NLU: ответ модели: {}",
-              generated == null
-                  ? "null"
-                  : generated.length() <= 1000 ? generated : generated.substring(0, 1000) + "…");
-      }
-    }
+    JsonNode payload = nlu.understand(session, text, zone, clock.instant()).orElse(null);
     if (payload == null)
       return finish(
           session,
@@ -365,13 +338,7 @@ public class IntentDispatcher {
 
   private void setMissingSlotPending(
       ChatSession session, String intent, JsonNode draft, String awaiting) {
-    var node = mapper.createObjectNode();
-    node.put("kind", "missing_slot");
-    node.put("intent", intent);
-    node.set("draft", draft.deepCopy());
-    node.set("awaiting", mapper.valueToTree(List.of(awaiting)));
-    node.put("created_at", clock.instant().toString());
-    session.setPendingClarification(node);
+    clarifications.missingSlot(session, intent, draft, awaiting);
   }
 
   private static String normalizeClarificationAnswer(String raw, String awaiting) {
@@ -465,10 +432,11 @@ public class IntentDispatcher {
               ? "На какое время поставить встречу?"
               : "На какое время поставить напоминание?");
     Item item = new Item();
-    item.setUser(users.getReferenceById(DefaultUser.ID));
+    item.setUser(currentUser.reference());
     item.setType(type);
     item.setTitle(title);
-    item.setDescription(request.text());
+    String description = slot(slots, "description");
+    item.setDescription(description == null || description.isBlank() ? request.text() : description);
     item.setPlace(slot(slots, "place"));
     if (type == ItemType.TASK) item.setDueAt(resolved.dueAt());
     else item.setStartAt(resolved.startAt());
@@ -535,7 +503,7 @@ public class IntentDispatcher {
             : EnumSet.of(ItemType.valueOf(filter.toUpperCase(Locale.ROOT)));
     var found =
         items.findInPeriod(
-            DefaultUser.ID,
+            currentUser.id(),
             period.from(),
             period.to(),
             types,
@@ -560,19 +528,7 @@ public class IntentDispatcher {
       String kind,
       String awaiting,
       String reply) {
-    session.setPendingClarification(
-        mapper.valueToTree(
-            Map.of(
-                "kind",
-                kind,
-                "intent",
-                payload.get("intent").asText(),
-                "draft",
-                payload.get("slots"),
-                "awaiting",
-                List.of(awaiting),
-                "created_at",
-                clock.instant().toString())));
+    clarifications.fromPayload(session, payload, kind, awaiting);
     return finish(
         session,
         request,
@@ -584,32 +540,9 @@ public class IntentDispatcher {
         payload);
   }
 
-  private boolean pendingExpired(JsonNode pending) {
-    try {
-      Instant created = Instant.parse(pending.path("created_at").asText());
-      return clock.instant().minusSeconds(app.pending().ttlMin() * 60L).isAfter(created);
-    } catch (RuntimeException e) {
-      return true;
-    }
-  }
-
-  private List<String> quickReplies(ChatSession session, String result) {
-    if (!"clarification".equals(result) || session.getPendingClarification() == null) return List.of();
-    return "conflict".equals(session.getPendingClarification().path("kind").asText())
-        ? List.of("Выбрать другое время", "Поставить в это же")
-        : List.of();
-  }
-
   private MessageResponse conflictClarification(
       ChatSession session, MessageRequest request, JsonNode payload, Item conflict, ZoneId zone) {
-    Map<String, Object> pending = new LinkedHashMap<>();
-    pending.put("kind", "conflict");
-    pending.put("intent", payload.get("intent").asText());
-    pending.put("draft", payload.get("slots"));
-    pending.put("awaiting", List.of("decision"));
-    pending.put("conflict_item_id", conflict.getId());
-    pending.put("created_at", clock.instant().toString());
-    session.setPendingClarification(mapper.valueToTree(pending));
+    clarifications.conflict(session, payload, conflict);
     return finish(session, request, "clarification", payload.get("intent").asText(),
         composer.conflict(conflict, zone), List.of(), false, payload);
   }
@@ -617,7 +550,7 @@ public class IntentDispatcher {
   private MessageResponse clarificationAnswer(
       ChatSession session, MessageRequest request, JsonNode payload, ZoneId zone) {
     JsonNode pending = session.getPendingClarification();
-    if (pending == null || pendingExpired(pending)) {
+    if (pending == null || clarifications.expired(pending)) {
       session.setPendingClarification(null);
       return finish(session, request, "refused", "clarification_answer",
           "Сейчас я не жду уточнения. Повторите команду целиком.", List.of(), false, payload);
@@ -636,7 +569,7 @@ public class IntentDispatcher {
 
     if ("confirm_delete".equals(kind)) {
       if (Set.of("yes", "да", "подтверждаю", "удаляй", "удалить", "хочу удалить", "ага", "да, удаляй").contains(normalized)) {
-        JsonNode resumed = resumePayload(pending, "delete_item", "selected_item_id", pending.path("item_id").asText());
+        JsonNode resumed = clarifications.resumePayload(pending, "delete_item", "selected_item_id", pending.path("item_id").asText());
         session.setPendingClarification(null);
         return deleteConfirmed(session, request, resumed, zone);
       }
@@ -648,7 +581,7 @@ public class IntentDispatcher {
     if ("conflict".equals(kind)) {
       String pendingIntent = pending.path("intent").asText("create_item");
       if (Set.of("keep_conflict", "yes", "все равно", "ставь все равно", "в это же").contains(normalized)) {
-        JsonNode resumed = resumePayload(pending, pendingIntent, null, null);
+        JsonNode resumed = clarifications.resumePayload(pending, pendingIntent, null, null);
         session.setPendingClarification(null);
         return "update_item".equals(pendingIntent)
             ? update(session, request, resumed, zone, true)
@@ -664,7 +597,7 @@ public class IntentDispatcher {
             "На какое время поставить встречу?", List.of(), false, payload);
       }
       String timeSlot = "update_item".equals(pendingIntent) ? "new_time_expr" : "time_expr";
-      JsonNode resumed = resumePayload(pending, pendingIntent, timeSlot, answer);
+      JsonNode resumed = clarifications.resumePayload(pending, pendingIntent, timeSlot, answer);
       session.setPendingClarification(null);
       return "update_item".equals(pendingIntent)
           ? update(session, request, resumed, zone, false)
@@ -685,11 +618,11 @@ public class IntentDispatcher {
         else if (normalized.matches(".*\\b(вторая|вторую|второй|второе)\\b.*")) number = 2;
         else if (normalized.matches(".*\\b(третья|третью|третий|третье)\\b.*")) number = 3;
         else number = -1;
-        if (number >= 1 && number <= ids.size()) selected = items.findById(ids.get(number - 1)).orElse(null);
+        if (number >= 1 && number <= ids.size()) selected = items.findActiveByIdAndUserId(ids.get(number - 1), currentUser.id()).orElse(null);
       } catch (NumberFormatException ignored) { }
       if (selected == null) {
         for (UUID id : ids) {
-          Item candidate = items.findById(id).orElse(null);
+          Item candidate = items.findActiveByIdAndUserId(id, currentUser.id()).orElse(null);
           if (candidate != null && normalized.contains(candidate.getTitle().toLowerCase(Locale.ROOT).replace('ё', 'е'))) {
             selected = candidate; break;
           }
@@ -698,7 +631,7 @@ public class IntentDispatcher {
       if (selected == null) return finish(session, request, "clarification", "clarification_answer",
           "Укажите номер записи из списка.", List.of(), false, payload);
       String pendingIntent = pending.path("intent").asText();
-      JsonNode resumed = resumePayload(pending, pendingIntent, "selected_item_id", selected.getId().toString());
+      JsonNode resumed = clarifications.resumePayload(pending, pendingIntent, "selected_item_id", selected.getId().toString());
       session.setPendingClarification(null);
       return switch (Intent.valueOf(pendingIntent)) {
         case search_items -> {
@@ -732,7 +665,7 @@ public class IntentDispatcher {
         case "end_time" -> "end_time_expr";
         default -> awaiting;
       };
-      JsonNode resumed = resumePayload(pending, pendingIntent, slotName, answer);
+      JsonNode resumed = clarifications.resumePayload(pending, pendingIntent, slotName, answer);
       session.setPendingClarification(null);
       Intent original = Intent.valueOf(resumed.path("intent").asText());
       return switch (original) {
@@ -750,66 +683,9 @@ public class IntentDispatcher {
         "Не получилось продолжить уточнение. Повторите команду целиком.", List.of(), false, payload);
   }
 
-  private JsonNode resumePayload(JsonNode pending, String intent, String slotName, String value) {
-    com.fasterxml.jackson.databind.node.ObjectNode resumed = mapper.createObjectNode();
-    resumed.put("intent", intent);
-    resumed.put("confidence", 1.0);
-    com.fasterxml.jackson.databind.node.ObjectNode slots = pending.path("draft").isObject()
-        ? (com.fasterxml.jackson.databind.node.ObjectNode) pending.path("draft").deepCopy()
-        : mapper.createObjectNode();
-    if (slotName != null && value != null) slots.put(slotName, value);
-    resumed.set("slots", slots);
-    return resumed;
-  }
-
-  private record TargetResolution(Item item, List<Item> candidates, boolean byQuery) {}
-
-  private TargetResolution resolveTarget(ChatSession session, JsonNode slots) {
-    String selected = slot(slots, "selected_item_id");
-    if (selected != null) {
-      try {
-        Item item = items.findById(UUID.fromString(selected)).orElse(null);
-        if (item != null && item.getDeletedAt() == null && item.getUser().getId().equals(DefaultUser.ID))
-          return new TargetResolution(item, List.of(), true);
-      } catch (IllegalArgumentException ignored) { }
-      return new TargetResolution(null, List.of(), true);
-    }
-    String ref = slot(slots, "item_ref");
-    if ("last".equals(ref)) {
-      Item item = session.getLastItem();
-      if (item == null || item.getDeletedAt() != null || !item.getUser().getId().equals(DefaultUser.ID))
-        return new TargetResolution(null, List.of(), false);
-      String requestedType = slot(slots, "item_type");
-      if (requestedType != null && item.getType() != ItemType.valueOf(requestedType.toUpperCase(Locale.ROOT)))
-        return new TargetResolution(null, List.of(), false);
-      return new TargetResolution(item, List.of(), false);
-    }
-    if ("by_query".equals(ref)) {
-      String query = slot(slots, "query");
-      if (query == null) return new TargetResolution(null, List.of(), true);
-      var ranked = search.search(query, 3);
-      String requestedType = slot(slots, "item_type");
-      if (requestedType != null) {
-        ItemType expected = ItemType.valueOf(requestedType.toUpperCase(Locale.ROOT));
-        ranked = ranked.stream().filter(c -> c.item().getType() == expected).toList();
-      }
-      var confident = search.confident(ranked);
-      if (confident.isPresent()) return new TargetResolution(confident.get(), List.of(), true);
-      return new TargetResolution(null, ranked.stream().map(ItemSearchService.Candidate::item).toList(), true);
-    }
-    return new TargetResolution(null, List.of(), false);
-  }
-
   private MessageResponse chooseItemClarification(
       ChatSession session, MessageRequest request, JsonNode payload, List<Item> candidates, ZoneId zone) {
-    Map<String, Object> pending = new LinkedHashMap<>();
-    pending.put("kind", "choose_item");
-    pending.put("intent", payload.path("intent").asText());
-    pending.put("draft", payload.path("slots"));
-    pending.put("awaiting", List.of("item"));
-    pending.put("candidate_ids", candidates.stream().map(Item::getId).toList());
-    pending.put("created_at", clock.instant().toString());
-    session.setPendingClarification(mapper.valueToTree(pending));
+    clarifications.chooseItem(session, payload, candidates);
     return finish(session, request, "clarification", payload.path("intent").asText(),
         composer.chooseItem(candidates, zone), candidates, false, payload);
   }
@@ -819,7 +695,7 @@ public class IntentDispatcher {
     String query = slot(payload.path("slots"), "query");
     if (query == null || query.isBlank())
       return clarify(session, request, payload, "missing_slot", "query", "Что именно найти?");
-    var ranked = search.search(query, 3);
+    var ranked = search.search(currentUser.id(), query, 3);
     List<Item> found = ranked.stream().map(ItemSearchService.Candidate::item).toList();
     if (found.isEmpty()) {
       session.setPendingClarification(null);
@@ -840,7 +716,7 @@ public class IntentDispatcher {
   private MessageResponse update(
       ChatSession session, MessageRequest request, JsonNode payload, ZoneId zone, boolean allowConflict) {
     JsonNode slots = payload.get("slots");
-    TargetResolution target = resolveTarget(session, slots);
+    TargetResolver.Resolution target = targets.resolve(session, slots);
     if (target.item() == null) {
       if (!target.candidates().isEmpty()) return chooseItemClarification(session, request, payload, target.candidates(), zone);
       if (target.byQuery()) return finish(session, request, "info", "update_item",
@@ -943,7 +819,7 @@ public class IntentDispatcher {
 
   private MessageResponse delete(
       ChatSession session, MessageRequest request, JsonNode payload, ZoneId zone) {
-    TargetResolution target = resolveTarget(session, payload.get("slots"));
+    TargetResolver.Resolution target = targets.resolve(session, payload.get("slots"));
     if (target.item() == null) {
       if (!target.candidates().isEmpty()) return chooseItemClarification(session, request, payload, target.candidates(), zone);
       if (target.byQuery()) return finish(session, request, "info", "delete_item",
@@ -951,20 +827,13 @@ public class IntentDispatcher {
       return clarify(session, request, payload, "choose_item", "item", "Какую запись удалить?");
     }
     Item item = target.item();
-    Map<String, Object> pending = new LinkedHashMap<>();
-    pending.put("kind", "confirm_delete");
-    pending.put("intent", "delete_item");
-    pending.put("draft", payload.path("slots"));
-    pending.put("awaiting", List.of("decision"));
-    pending.put("item_id", item.getId().toString());
-    pending.put("created_at", clock.instant().toString());
-    session.setPendingClarification(mapper.valueToTree(pending));
+    clarifications.confirmDelete(session, payload, item);
     return finish(session, request, "clarification", "delete_item", composer.deleteConfirmation(item, zone), List.of(item), false, payload);
   }
 
   private MessageResponse deleteConfirmed(
       ChatSession session, MessageRequest request, JsonNode payload, ZoneId zone) {
-    TargetResolution target = resolveTarget(session, payload.get("slots"));
+    TargetResolver.Resolution target = targets.resolve(session, payload.get("slots"));
     if (target.item() == null) return finish(session, request, "info", "delete_item",
         "Эта запись уже недоступна.", List.of(), false, payload);
     Item item = target.item();
@@ -993,7 +862,7 @@ public class IntentDispatcher {
 
   private MessageResponse complete(
       ChatSession session, MessageRequest request, JsonNode payload, ZoneId zone) {
-    TargetResolution target = resolveTarget(session, payload.get("slots"));
+    TargetResolver.Resolution target = targets.resolve(session, payload.get("slots"));
     if (target.item() == null) {
       if (!target.candidates().isEmpty()) return chooseItemClarification(session, request, payload, target.candidates(), zone);
       if (target.byQuery()) return finish(session, request, "info", "complete_item",
@@ -1018,7 +887,7 @@ public class IntentDispatcher {
       boolean changed,
       JsonNode payload) {
     Message user = new Message();
-    user.setUser(users.getReferenceById(DefaultUser.ID));
+    user.setUser(currentUser.reference());
     user.setSession(session);
     user.setRole(MessageRole.USER);
     user.setContent(request.text());
@@ -1053,7 +922,7 @@ public class IntentDispatcher {
             speech,
             found.stream().map(i -> ItemDto.from(i, ZoneId.of(request.timezone()))).toList(),
             changed,
-            quickReplies(session, result));
+            clarifications.quickReplies(session, result));
     user.setResponseJson(mapper.valueToTree(response));
     sessions.save(session);
     return response;

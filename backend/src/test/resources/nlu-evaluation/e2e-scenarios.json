@@ -1,0 +1,135 @@
+{
+  "version": "1.0",
+  "fixed_now": "2026-11-02T09:00:00Z",
+  "timezone": "Europe/Moscow",
+  "scenarios": [
+    {
+      "id": "DB-001",
+      "name": "create reminder persists resolved time",
+      "seed_items": [],
+      "steps": [
+        {
+          "text": "Напомни завтра в 10 позвонить Ивану",
+          "llm": {"intent":"create_item","confidence":0.98,"slots":{"item_type":"reminder","title":"Позвонить Ивану","date_expr":"завтра","time_expr":"10:00"}},
+          "expect": {"result":"done","intent":"create_item","data_changed":true,"response_items":1,"active_db_items":1}
+        }
+      ],
+      "final_items": [
+        {"type":"REMINDER","title":"Позвонить Ивану","status":"TODO","start_at":"2026-11-03T07:00:00Z"}
+      ]
+    },
+    {
+      "id": "DB-002",
+      "name": "list is backed by seeded database state",
+      "seed_items": [
+        {"type":"MEETING","title":"Встреча с командой","start_at":"2026-11-02T10:00:00Z"},
+        {"type":"TASK","title":"Сдать отчёт","due_at":"2026-11-02T20:59:00Z"}
+      ],
+      "steps": [
+        {
+          "text": "Что у меня сегодня?",
+          "llm": {"intent":"list_items","confidence":0.99,"slots":{"period_expr":"сегодня"}},
+          "expect": {"result":"info","intent":"list_items","data_changed":false,"response_items":2,"active_db_items":2}
+        }
+      ],
+      "final_items": [
+        {"type":"MEETING","title":"Встреча с командой","status":"TODO","start_at":"2026-11-02T10:00:00Z"},
+        {"type":"TASK","title":"Сдать отчёт","status":"TODO","due_at":"2026-11-02T20:59:00Z"}
+      ]
+    },
+    {
+      "id": "DB-003",
+      "name": "update resolves target from database query",
+      "seed_items": [
+        {"type":"MEETING","title":"Созвон с Мариной","start_at":"2026-11-04T12:00:00Z"}
+      ],
+      "steps": [
+        {
+          "text": "Перенеси созвон с Мариной на пятницу",
+          "llm": {"intent":"update_item","confidence":0.98,"slots":{"item_ref":"by_query","query":"созвон с Мариной","new_date_expr":"пятница"}},
+          "expect": {"result":"done","intent":"update_item","data_changed":true,"response_items":1,"active_db_items":1}
+        }
+      ],
+      "final_items": [
+        {"type":"MEETING","title":"Созвон с Мариной","status":"TODO","start_at":"2026-11-06T12:00:00Z"}
+      ]
+    },
+    {
+      "id": "DB-004",
+      "name": "complete resolves named task and changes status",
+      "seed_items": [
+        {"type":"TASK","title":"Подготовить отчёт","due_at":"2026-11-05T20:59:00Z"}
+      ],
+      "steps": [
+        {
+          "text": "Отметь отчёт выполненным",
+          "llm": {"intent":"complete_item","confidence":0.99,"slots":{"item_ref":"by_query","query":"отчёт"}},
+          "expect": {"result":"done","intent":"complete_item","data_changed":true,"response_items":1,"active_db_items":1}
+        }
+      ],
+      "final_items": [
+        {"type":"TASK","title":"Подготовить отчёт","status":"DONE","due_at":"2026-11-05T20:59:00Z"}
+      ]
+    },
+    {
+      "id": "DB-005",
+      "name": "delete requires confirmation then soft deletes",
+      "seed_items": [
+        {"type":"TASK","title":"Черновик отчёта","due_at":"2026-11-05T20:59:00Z"}
+      ],
+      "steps": [
+        {
+          "text": "Удали задачу Черновик отчёта",
+          "llm": {"intent":"delete_item","confidence":0.99,"slots":{"item_ref":"by_query","query":"Черновик отчёта","item_type":"task"}},
+          "expect": {"result":"clarification","intent":"delete_item","data_changed":false,"response_items":1,"active_db_items":1}
+        },
+        {
+          "text": "Да, удаляй",
+          "expect": {"result":"done","intent":"delete_item","data_changed":true,"response_items":0,"active_db_items":0}
+        }
+      ],
+      "final_items": []
+    },
+    {
+      "id": "DB-006",
+      "name": "missing time clarification resumes create without second LLM call",
+      "seed_items": [],
+      "steps": [
+        {
+          "text": "Создай встречу с командой завтра",
+          "llm": {"intent":"create_item","confidence":0.98,"slots":{"item_type":"meeting","title":"Встреча с командой","date_expr":"завтра"}},
+          "expect": {"result":"clarification","intent":"create_item","data_changed":false,"response_items":0,"active_db_items":0}
+        },
+        {
+          "text": "В 15:00",
+          "expect": {"result":"done","intent":"create_item","data_changed":true,"response_items":1,"active_db_items":1}
+        }
+      ],
+      "final_items": [
+        {"type":"MEETING","title":"Встреча с командой","status":"TODO","start_at":"2026-11-03T12:00:00Z"}
+      ]
+    },
+    {
+      "id": "DB-007",
+      "name": "last_item context survives between messages",
+      "seed_items": [
+        {"type":"MEETING","title":"Встреча с дизайнером","start_at":"2026-11-04T11:00:00Z"}
+      ],
+      "steps": [
+        {
+          "text": "Найди встречу с дизайнером",
+          "llm": {"intent":"search_items","confidence":0.99,"slots":{"query":"встреча с дизайнером"}},
+          "expect": {"result":"info","intent":"search_items","data_changed":false,"response_items":1,"active_db_items":1}
+        },
+        {
+          "text": "Перенеси её на завтра",
+          "llm": {"intent":"update_item","confidence":0.99,"slots":{"item_ref":"last","new_date_expr":"завтра"}},
+          "expect": {"result":"done","intent":"update_item","data_changed":true,"response_items":1,"active_db_items":1}
+        }
+      ],
+      "final_items": [
+        {"type":"MEETING","title":"Встреча с дизайнером","status":"TODO","start_at":"2026-11-03T11:00:00Z"}
+      ]
+    }
+  ]
+}

@@ -1,4 +1,4 @@
-import { API_BASE } from '../../api/env';
+import { request } from '../../api/http';
 
 type PushConfig = { enabled: boolean; public_key: string };
 type SubscriptionJson = { endpoint: string; keys: { p256dh: string; auth: string } };
@@ -10,17 +10,12 @@ function toUint8Array(base64url: string): Uint8Array<ArrayBuffer> {
 }
 
 async function config(): Promise<PushConfig> {
-  const response = await fetch(`${API_BASE}/api/push/config`);
-  if (!response.ok) throw new Error('Не удалось получить настройки уведомлений');
-  return response.json() as Promise<PushConfig>;
+  return request<PushConfig>('/api/push/config');
 }
 
 async function sendSubscription(path: string, subscription: PushSubscription) {
   const json = subscription.toJSON() as SubscriptionJson;
-  const response = await fetch(`${API_BASE}/api/push/${path}`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(json),
-  });
-  if (!response.ok) throw new Error('Не удалось сохранить подписку на сервере');
+  await request<void>(`/api/push/${path}`, { method: 'POST', json });
 }
 
 export function pushSupported() {

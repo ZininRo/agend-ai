@@ -4,7 +4,7 @@ import com.example.agend_ai.api.dto.ItemDto;
 import com.example.agend_ai.api.dto.ItemsResponse;
 import com.example.agend_ai.api.error.AppException;
 import com.example.agend_ai.api.error.ErrorCode;
-import com.example.agend_ai.common.DefaultUser;
+import com.example.agend_ai.security.CurrentUser;
 import com.example.agend_ai.entity.Item;
 import com.example.agend_ai.entity.enums.ItemStatus;
 import com.example.agend_ai.entity.enums.ItemType;
@@ -30,6 +30,7 @@ public class ItemQueryService {
 
     private final ItemRepository itemRepository;
     private final ZoneResolver zones;
+    private final CurrentUser currentUser;
 
     @Transactional(readOnly = true)
     public ItemsResponse list(LocalDate from, LocalDate to, List<String> types, String status, String timezone) {
@@ -43,7 +44,7 @@ public class ItemQueryService {
         Instant fromInstant = from.atStartOfDay(zone).toInstant();
         Instant toInstant = to.plusDays(1).atStartOfDay(zone).toInstant();
 
-        List<Item> items = itemRepository.findInPeriod(DefaultUser.ID, fromInstant, toInstant, typeSet, statusSet);
+        List<Item> items = itemRepository.findInPeriod(currentUser.id(), fromInstant, toInstant, typeSet, statusSet);
         return new ItemsResponse(from, to, items.stream().map(i -> ItemDto.from(i, zone)).toList());
     }
 

@@ -3,13 +3,12 @@ package com.example.agend_ai.service;
 import com.example.agend_ai.api.dto.VoiceResponse;
 import com.example.agend_ai.api.error.AppException;
 import com.example.agend_ai.api.error.ErrorCode;
-import com.example.agend_ai.common.DefaultUser;
+import com.example.agend_ai.security.CurrentUser;
 import com.example.agend_ai.config.SttProperties;
 import com.example.agend_ai.entity.Message;
 import com.example.agend_ai.entity.enums.MessageRole;
 import com.example.agend_ai.repository.ChatSessionRepository;
 import com.example.agend_ai.repository.MessageRepository;
-import com.example.agend_ai.repository.UserRepository;
 import com.example.agend_ai.service.audio.AudioProcessor;
 import com.example.agend_ai.service.stt.SttClient;
 import java.util.UUID;
@@ -28,7 +27,7 @@ public class VoiceService {
     private final SttProperties sttProperties;
     private final ChatSessionRepository sessions;
     private final MessageRepository messages;
-    private final UserRepository users;
+    private final CurrentUser currentUser;
 
     @Transactional
     public VoiceResponse transcribe(MultipartFile audio, UUID sessionId, Long durationMs) {
@@ -43,10 +42,12 @@ public class VoiceService {
         if (recognized) return new VoiceResponse(true, result.text(), result.confidence(), null);
 
         // Only the assistant's failed-recognition message is persisted. No user/audio content is stored.
-        sessions.ensure(sessionId, DefaultUser.ID);
-        var session = sessions.findByIdForUpdate(sessionId).orElseThrow();
+        UUID userId = currentUser.id();
+        sessions.ensure(sessionId, userId);
+        var session = sessions.findByIdAndUserIdForUpdate(sessionId, userId)
+                .orElseThrow(() -> new AppException(ErrorCode.REQUEST_INVALID));
         Message assistant = new Message();
-        assistant.setUser(users.getReferenceById(DefaultUser.ID));
+        assistant.setUser(currentUser.reference());
         assistant.setSession(session);
         assistant.setRole(MessageRole.ASSISTANT);
         assistant.setContent(NOT_RECOGNIZED);

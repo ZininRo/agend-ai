@@ -3,6 +3,11 @@ package com.example.agend_ai.api.error;
 /** Каталог технических ошибок (разд. 13.3 ТЗ). */
 public enum ErrorCode {
 
+    AUTH_REQUIRED(401, "Войдите в аккаунт, чтобы продолжить.", false, Fallback.RELOAD),
+    AUTH_INVALID(401, "Неверная почта или пароль.", false, Fallback.REPHRASE),
+    AUTH_SESSION_EXPIRED(401, "Сессия истекла. Войдите снова.", false, Fallback.RELOAD),
+    ACCESS_DENIED(403, "Недостаточно прав для этого действия.", false, Fallback.RELOAD),
+    ACCOUNT_EXISTS(409, "Аккаунт с такой почтой уже существует.", false, Fallback.REPHRASE),
     REQUEST_INVALID(400, "Не удалось обработать запрос. Обновите страницу и попробуйте снова.", false, Fallback.RELOAD),
     TEXT_EMPTY(400, "Введите сообщение.", false, Fallback.REPHRASE),
     TEXT_TOO_LONG(400, "Сообщение слишком длинное (максимум 1000 символов). Сократите его и отправьте снова.", false, Fallback.REPHRASE),

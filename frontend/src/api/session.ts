@@ -32,6 +32,16 @@ export function getSessionId(): string {
   }
 }
 
+/** Новый authenticated пользователь не должен наследовать chat_session предыдущего аккаунта. */
+export function resetSessionId(): void {
+  memorySessionId = null;
+  try {
+    sessionStorage.removeItem(SESSION_KEY);
+  } catch {
+    // In-memory fallback уже сброшен выше.
+  }
+}
+
 /**
  * Часовой пояс пользователя (IANA). Передаётся и в /api/items, и в /api/message:
  * бэкенд считает по нему границы дней и слова «завтра», «в пятницу».

@@ -24,6 +24,15 @@ spring:
     serialization:
       write-dates-as-timestamps: false
 
+auth:
+  jwt-secret: ${AUTH_JWT_SECRET:}
+  issuer: ${AUTH_ISSUER:agend-ai}
+  access-token-minutes: ${AUTH_ACCESS_TOKEN_MINUTES:15}
+  refresh-token-days: ${AUTH_REFRESH_TOKEN_DAYS:30}
+  refresh-reuse-grace-seconds: ${AUTH_REFRESH_REUSE_GRACE_SECONDS:10}
+  cookie-secure: ${AUTH_COOKIE_SECURE:false}
+  cookie-same-site: ${AUTH_COOKIE_SAME_SITE:Strict}
+
 app:
   timezone: Europe/Moscow
   context:

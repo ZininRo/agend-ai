@@ -14,6 +14,24 @@ import java.util.UUID;
 
 public interface ItemRepository extends JpaRepository<Item, UUID> {
 
+
+    @Query("""
+            select i from Item i
+            where i.id = :id
+              and i.user.id = :userId
+              and i.deletedAt is null
+            """)
+    java.util.Optional<Item> findActiveByIdAndUserId(@Param("id") UUID id,
+                                                      @Param("userId") UUID userId);
+
+    @Query("""
+            select i from Item i
+            where i.user.id = :userId
+              and i.deletedAt is null
+            order by i.updatedAt desc
+            """)
+    List<Item> findAllActiveByUserId(@Param("userId") UUID userId);
+
     /**
      * Записи периода [from, to) по основной дате:
      * start_at для встреч и напоминаний, due_at для задач.

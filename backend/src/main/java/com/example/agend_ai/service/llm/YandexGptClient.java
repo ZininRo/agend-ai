@@ -19,7 +19,7 @@ import org.springframework.web.client.*;
  *
  * <p>Запрос всегда использует structured output через {@code jsonSchema}. Транспортные ошибки
  * провайдера не ретраятся здесь: по контракту проекта единственный повтор LLM выполняет
- * {@code IntentDispatcher}, и только когда модель вернула невалидный JSON. Ответ дополнительно
+ * {@code NluEngine}, и только когда модель вернула невалидный JSON. Ответ дополнительно
  * проверяется {@link IntentValidator} на нашей стороне.
  */
 @Slf4j

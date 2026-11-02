@@ -1,5 +1,6 @@
-import { API_BASE } from './env';
 import { ApiError, FALLBACKS, clientError, errorFromStatus, type Fallback } from './ApiError';
+import { AUTH_EXPIRED_EVENT, getAccessToken, refreshAccessToken } from './authToken';
+import { API_BASE } from './env';
 
 // Формат ошибки бэкенда: { "error": { code, message, retryable, retry_after_sec, fallback }, "request_id" }
 type ErrorBody = {
@@ -25,6 +26,8 @@ type Options = {
   timeoutMs?: number;
   /** Отмена запроса вызывающим (смена месяца, уход со страницы) */
   signal?: AbortSignal;
+  /** false только для login/register/logout: эти endpoints не требуют access token. */
+  auth?: boolean;
 };
 
 function buildUrl(path: string, query: Options['query']): string {
@@ -54,11 +57,42 @@ async function parseError(response: Response): Promise<ApiError> {
   });
 }
 
-/**
- * Единая точка запросов к бэкенду. Успех — разобранный JSON.
- * Любой сбой — ApiError с готовым текстом для пользователя; отмена через signal пробрасывается как AbortError.
- */
-export async function request<T>(path: string, options: Options = {}): Promise<T> {
+async function fetchOnce(path: string, options: Options, signal: AbortSignal): Promise<Response> {
+  const headers = new Headers();
+  if (options.json !== undefined) headers.set('Content-Type', 'application/json');
+  if (options.auth !== false) {
+    const token = getAccessToken();
+    if (token) headers.set('Authorization', `Bearer ${token}`);
+  }
+  return fetch(buildUrl(path, options.query), {
+    method: options.method ?? 'GET',
+    headers,
+    body: options.json !== undefined ? JSON.stringify(options.json) : options.form,
+    signal,
+    credentials: 'include',
+  });
+}
+
+async function fetchWithRefresh(path: string, options: Options, signal: AbortSignal): Promise<Response> {
+  let response = await fetchOnce(path, options, signal);
+  const canRefresh = options.auth !== false && !path.startsWith('/api/auth/');
+  if (response.status === 401 && canRefresh && !signal.aborted) {
+    const refreshed = await refreshAccessToken();
+    if (refreshed && !signal.aborted) {
+      response = await fetchOnce(path, options, signal);
+      if (response.status === 401) window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
+    } else if (!signal.aborted) {
+      window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
+    }
+  }
+  return response;
+}
+
+async function withResponse<T>(
+  path: string,
+  options: Options,
+  parseSuccess: (response: Response) => Promise<T>,
+): Promise<T> {
   const controller = new AbortController();
   let timedOut = false;
   const timer = window.setTimeout(() => {
@@ -69,19 +103,9 @@ export async function request<T>(path: string, options: Options = {}): Promise<T
   options.signal?.addEventListener('abort', forwardAbort);
 
   try {
-    const response = await fetch(buildUrl(path, options.query), {
-      method: options.method ?? 'GET',
-      headers: options.json !== undefined ? { 'Content-Type': 'application/json' } : undefined,
-      body: options.json !== undefined ? JSON.stringify(options.json) : options.form,
-      signal: controller.signal,
-    });
+    const response = await fetchWithRefresh(path, options, controller.signal);
     if (!response.ok) throw await parseError(response);
-    if (response.status === 204) return undefined as T;
-    try {
-      return (await response.json()) as T;
-    } catch {
-      throw clientError('BAD_RESPONSE', response.status);
-    }
+    return await parseSuccess(response);
   } catch (error) {
     if (error instanceof ApiError) throw error;
     if (options.signal?.aborted) throw error;
@@ -90,4 +114,24 @@ export async function request<T>(path: string, options: Options = {}): Promise<T
     window.clearTimeout(timer);
     options.signal?.removeEventListener('abort', forwardAbort);
   }
+}
+
+/**
+ * Единая точка JSON-запросов к бэкенду. Access token живёт только в памяти; при 401 клиент один
+ * раз делает refresh по HttpOnly cookie и повторяет исходный запрос.
+ */
+export async function request<T>(path: string, options: Options = {}): Promise<T> {
+  return withResponse(path, options, async (response) => {
+    if (response.status === 204) return undefined as T;
+    try {
+      return (await response.json()) as T;
+    } catch {
+      throw clientError('BAD_RESPONSE', response.status);
+    }
+  });
+}
+
+/** Авторизованная загрузка бинарного ответа (CSV/ICS). */
+export async function requestBlob(path: string, options: Options = {}): Promise<Blob> {
+  return withResponse(path, options, (response) => response.blob());
 }

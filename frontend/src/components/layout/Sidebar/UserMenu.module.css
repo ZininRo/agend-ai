@@ -1,3 +1,4 @@
+.wrapper { position: relative; }
 .user {
   display: flex;
   align-items: center;
@@ -34,3 +35,21 @@
   flex-shrink: 0;
   margin-right: 13px;
 }
+
+.menu {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 8px);
+  z-index: 60;
+  padding: 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: #242127;
+  box-shadow: 0 12px 32px rgba(0,0,0,.35);
+}
+.menuCollapsed { left: 0; right: auto; width: 220px; }
+.email { overflow: hidden; text-overflow: ellipsis; margin: 0 4px 8px; color: var(--color-text-subtle); font-size: 12px; }
+.menu button { width: 100%; border: 0; border-radius: 8px; padding: 8px 10px; background: var(--color-surface); cursor: pointer; text-align: left; }
+.menu button:hover:not(:disabled) { filter: brightness(1.12); }
+.menu button:disabled { opacity: .6; }

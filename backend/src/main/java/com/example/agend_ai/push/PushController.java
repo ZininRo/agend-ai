@@ -1,6 +1,6 @@
 package com.example.agend_ai.push;
 
-import com.example.agend_ai.common.DefaultUser;
+import com.example.agend_ai.security.CurrentUser;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -15,10 +15,12 @@ import java.util.UUID;
 public class PushController {
     private final JdbcTemplate jdbc;
     private final PushSender sender;
+    private final CurrentUser currentUser;
 
-    public PushController(JdbcTemplate jdbc, PushSender sender) {
+    public PushController(JdbcTemplate jdbc, PushSender sender, CurrentUser currentUser) {
         this.jdbc = jdbc;
         this.sender = sender;
+        this.currentUser = currentUser;
     }
 
     public record Keys(@NotBlank String p256dh, @NotBlank String auth) {}
@@ -42,12 +44,12 @@ public class PushController {
                 INSERT INTO push_subscriptions(id,user_id,endpoint,p256dh,auth_secret)
                 VALUES (?,?,?,?,?) ON CONFLICT(endpoint) DO UPDATE
                 SET p256dh=EXCLUDED.p256dh, auth_secret=EXCLUDED.auth_secret, user_id=EXCLUDED.user_id
-                """, UUID.randomUUID(), DefaultUser.ID, body.endpoint(), body.keys().p256dh(), body.keys().auth());
+                """, UUID.randomUUID(), currentUser.id(), body.endpoint(), body.keys().p256dh(), body.keys().auth());
     }
 
     @PostMapping("/unsubscribe")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void unsubscribe(@RequestBody @Valid Subscription body) {
-        jdbc.update("DELETE FROM push_subscriptions WHERE endpoint=? AND user_id=?", body.endpoint(), DefaultUser.ID);
+        jdbc.update("DELETE FROM push_subscriptions WHERE endpoint=? AND user_id=?", body.endpoint(), currentUser.id());
     }
 }

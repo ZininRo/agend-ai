@@ -1,9 +1,8 @@
 
-import { request } from '../../api/http';
+import { request, requestBlob } from '../../api/http';
 import type { ItemDto, ItemType, ItemStatus, ItemsResponseDto } from '../../api/types';
 import type { Month, RecordItem, RecordKind } from './types';
 import { getTimezone } from '../../api/session';
-import { API_BASE } from '../../api/env';
 
 // Типы записей соответствуют ItemType backend.
 const KIND_BY_TYPE: Record<ItemType, RecordKind> = {
@@ -81,11 +80,10 @@ export type ExportFormat = 'csv' | 'ics';
 /** Скачивает записи выбранного месяца: CSV для Excel/таблиц или ICS для календаря. */
 export async function exportRecords(month: Month, format: ExportFormat): Promise<void> {
   const { from, to } = monthRange(month);
-  const params = new URLSearchParams({ from, to, timezone: getTimezone(), format });
-  const response = await fetch(`${API_BASE}/api/items/export?${params.toString()}`);
-  if (!response.ok) throw new Error('Не удалось экспортировать записи. Попробуйте ещё раз.');
-
-  const blob = await response.blob();
+  const blob = await requestBlob('/api/items/export', {
+    query: { from, to, timezone: getTimezone(), format },
+    timeoutMs: 30_000,
+  });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
