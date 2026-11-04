@@ -41,6 +41,11 @@ public class Message extends BaseEntity {
     @Convert(converter = EncryptedStringConverter.class)
     private String content;
 
+    /** Текст, который должен произнести TTS. Если null, используется content. */
+    @Column(name = "speech_content", columnDefinition = "TEXT")
+    @Convert(converter = EncryptedStringConverter.class)
+    private String speechContent;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "input_type", length = 20)
     private MessageInputType inputType;

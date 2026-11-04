@@ -896,16 +896,6 @@ public class IntentDispatcher {
     user.setClientMessageId(request.clientMessageId());
     user.setTimezone(request.timezone());
     messages.save(user);
-    Message assistant = new Message();
-    assistant.setUser(user.getUser());
-    assistant.setSession(session);
-    assistant.setRole(MessageRole.ASSISTANT);
-    assistant.setContent(reply);
-    assistant.setIntent(intent);
-    assistant.setIntentPayload(payload);
-    assistant.setTimezone(request.timezone());
-    if (found.size() == 1) assistant.setItem(found.get(0));
-    messages.saveAndFlush(assistant);
     String speech =
         found.size() > 5
             ? "Найдено записей: "
@@ -913,6 +903,17 @@ public class IntentDispatcher {
                 + ". Первые пять: "
                 + String.join("; ", found.stream().limit(5).map(Item::getTitle).toList())
             : null;
+    Message assistant = new Message();
+    assistant.setUser(user.getUser());
+    assistant.setSession(session);
+    assistant.setRole(MessageRole.ASSISTANT);
+    assistant.setContent(reply);
+    assistant.setSpeechContent(speech != null ? speech : reply);
+    assistant.setIntent(intent);
+    assistant.setIntentPayload(payload);
+    assistant.setTimezone(request.timezone());
+    if (found.size() == 1) assistant.setItem(found.get(0));
+    messages.saveAndFlush(assistant);
     MessageResponse response =
         new MessageResponse(
             assistant.getId(),

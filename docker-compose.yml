@@ -41,6 +41,14 @@ services:
       LOGGING_LEVEL_COM_EXAMPLE_AGEND_AI: ${LOG_LEVEL:-INFO}
       STT_PROVIDER: ${STT_PROVIDER:-}
       STT_API_KEY: ${STT_API_KEY:-}
+      TTS_PROVIDER: ${TTS_PROVIDER:-speechkit}
+      TTS_API_KEY: ${TTS_API_KEY:-}
+      TTS_BASE_URL: ${TTS_BASE_URL:-https://tts.api.cloud.yandex.net}
+      TTS_TIMEOUT_SEC: ${TTS_TIMEOUT_SEC:-12}
+      TTS_VOICE: ${TTS_VOICE:-jane}
+      TTS_EMOTION: ${TTS_EMOTION:-}
+      TTS_SPEED: ${TTS_SPEED:-1.0}
+      TTS_MAX_CHARS: ${TTS_MAX_CHARS:-400}
     ports:
       - "8080:8080"
 

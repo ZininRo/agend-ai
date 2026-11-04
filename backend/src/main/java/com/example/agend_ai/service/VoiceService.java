@@ -51,6 +51,7 @@ public class VoiceService {
         assistant.setSession(session);
         assistant.setRole(MessageRole.ASSISTANT);
         assistant.setContent(NOT_RECOGNIZED);
+        assistant.setSpeechContent(NOT_RECOGNIZED);
         assistant.setIntent("stt_not_recognized");
         messages.save(assistant);
         return new VoiceResponse(false, "", result.confidence(), NOT_RECOGNIZED);

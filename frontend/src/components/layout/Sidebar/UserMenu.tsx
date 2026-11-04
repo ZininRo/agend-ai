@@ -40,7 +40,7 @@ export function UserMenu({ collapsed }: Props) {
       {open && (
         <div className={`${styles.menu} ${collapsed ? styles.menuCollapsed : ''}`}>
           {auth.user?.email && <div className={styles.email}>{auth.user.email}</div>}
-          <button type="button" onClick={() => void logout()} disabled={loggingOut}>
+          <button type="button" className={styles.logoutButton} onClick={() => void logout()} disabled={loggingOut}>
             {loggingOut ? 'Выход…' : 'Выйти'}
           </button>
         </div>

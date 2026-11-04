@@ -4,6 +4,7 @@ import com.example.agend_ai.auth.dto.AuthResponse;
 import com.example.agend_ai.auth.dto.AuthUserDto;
 import com.example.agend_ai.auth.dto.LoginRequest;
 import com.example.agend_ai.auth.dto.RegisterRequest;
+import com.example.agend_ai.auth.dto.UpdatePreferencesRequest;
 import com.example.agend_ai.config.AuthProperties;
 import jakarta.validation.Valid;
 import java.time.Duration;
@@ -13,6 +14,7 @@ import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -53,6 +55,11 @@ public class AuthController {
   @GetMapping("/me")
   public AuthUserDto me() {
     return auth.me();
+  }
+
+  @PatchMapping("/me")
+  public AuthUserDto updateMe(@Valid @RequestBody UpdatePreferencesRequest request) {
+    return auth.updatePreferences(request);
   }
 
   private ResponseEntity<AuthResponse> respond(AuthTokens tokens) {

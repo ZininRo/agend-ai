@@ -50,6 +50,17 @@ stt:
   timeout-sec: ${STT_TIMEOUT_SEC:10}
   min-confidence: ${STT_MIN_CONFIDENCE:0.5}
 
+# Синтез речи. Если TTS_API_KEY не задан, SpeechKit TTS использует STT_API_KEY.
+tts:
+  provider: ${TTS_PROVIDER:speechkit}
+  api-key: ${TTS_API_KEY:}
+  base-url: ${TTS_BASE_URL:https://tts.api.cloud.yandex.net}
+  timeout-sec: ${TTS_TIMEOUT_SEC:12}
+  voice: ${TTS_VOICE:jane}
+  emotion: ${TTS_EMOTION:}
+  speed: ${TTS_SPEED:1.0}
+  max-chars: ${TTS_MAX_CHARS:400}
+
 # YandexGPT. Ключ и каталог берутся из .env: LLM_API_KEY и LLM_FOLDER_ID.
 llm:
   provider: ${LLM_PROVIDER:yandexgpt}

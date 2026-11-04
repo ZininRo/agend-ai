@@ -28,4 +28,7 @@ public class User extends BaseEntity {
 
     @Column(name = "timezone", nullable = false, length = 64)
     private String timezone = "Europe/Moscow";
+
+    @Column(name = "tts_voice", length = 32)
+    private String ttsVoice;
 }

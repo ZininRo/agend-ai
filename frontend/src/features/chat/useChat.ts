@@ -96,7 +96,7 @@ export function useChat() {
   /** Ошибка = сообщение ассистента в чате (с кнопками исправления) + озвучивание. */
   const postError = (text: string, actions: MessageAction[] = []) => {
     setMessages((prev) => [...prev, { id: makeId(), role: 'assistant', text, isError: true, actions }]);
-    speech.speak(text);
+    speech.speak(null, text);
   };
 
   const typeInstead: MessageAction = {
@@ -133,7 +133,7 @@ export function useChat() {
         // Речь не распознана: сообщение от ассистента в чат, поле ввода не трогаем (S2, FR-5)
         const notHeard = result.assistantMessage ?? NOT_HEARD;
         setMessages((prev) => [...prev, { id: makeId(), role: 'assistant', text: notHeard }]);
-        speech.speak(notHeard);
+        speech.speak(null, notHeard);
         return;
       }
       // Если в поле уже что-то набрано, распознанный текст дописывается через пробел
@@ -192,7 +192,7 @@ export function useChat() {
       const reply = await sendMessage(request);
       setMessages((prev) => [...prev, { id: reply.id || makeId(), role: 'assistant', text: reply.text }]);
       setQuickReplies(reply.quickReplies);
-      speech.speak(reply.speechText ?? reply.text);
+      speech.speak(reply.id, reply.speechText ?? reply.text);
       if (reply.dataChanged) notifyRecordsChanged(); // боковое меню перезапросит записи
     } catch (error) {
       const apiError = toApiError(error);

@@ -34,4 +34,8 @@ public interface MessageRepository extends JpaRepository<Message, UUID> {
       @Param("sessionId") UUID sessionId,
       @Param("userId") UUID userId,
       @Param("clientMessageId") UUID clientMessageId);
+
+  @Query("select m from Message m where m.id = :id and m.user.id = :userId")
+  java.util.Optional<Message> findByIdAndUserId(
+      @Param("id") UUID id, @Param("userId") UUID userId);
 }

@@ -67,6 +67,17 @@ export type AuthUserDto = {
   email: string | null;
   display_name: string | null;
   timezone: string;
+  tts_voice: string;
+};
+
+export type TtsVoiceDto = {
+  id: string;
+  name: string;
+  gender: 'female' | 'male';
+};
+
+export type TtsVoicesResponseDto = {
+  voices: TtsVoiceDto[];
 };
 
 export type AuthResponseDto = {

@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { fetchSpeech } from './api';
 import { hasNoRussianVoice, isSpeechSupported, pickRussianVoice, toSpokenParts } from './speech';
 
 const STORAGE_KEY = 'agendai.tts.enabled';
 
-/** Настройка «озвучивать ответы» хранится в браузере; по умолчанию включено. */
 function readEnabled(): boolean {
   try {
     return localStorage.getItem(STORAGE_KEY) !== '0';
@@ -12,63 +12,91 @@ function readEnabled(): boolean {
   }
 }
 
+function isAudioSupported(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    typeof Audio !== 'undefined' &&
+    typeof URL !== 'undefined' &&
+    typeof URL.createObjectURL === 'function'
+  );
+}
+
 /**
- * Озвучивание ответов и ошибок ассистента через встроенный в браузер синтез речи (speechSynthesis).
- * Ничего не знает о чате: получает готовый текст в speak() и читает его вслух по-русски.
- *
- * - speak(text) заменяет то, что говорится сейчас; новая реплика не накладывается на прежнюю;
- * - cancel() останавливает речь (перед записью голоса, иначе микрофон услышит ассистента);
- * - unlock() вызывается из обработчика клика: Safari и iOS разрешают речь только после действия пользователя.
+ * Озвучивание ответов:
+ * 1) для сохранённого assistant-message запрашивает красивый серверный TTS;
+ * 2) если TTS недоступен/таймаут/браузер запретил autoplay, использует speechSynthesis как fallback;
+ * 3) локальные ошибки UI сразу читаются browser fallback, потому что у них нет message_id в БД.
  */
 export function useSpeech() {
-  const supported = isSpeechSupported();
+  const browserSupported = isSpeechSupported();
+  const audioSupported = isAudioSupported();
+  const supported = audioSupported || browserSupported;
+
   const [enabled, setEnabledState] = useState(readEnabled);
   const [speaking, setSpeaking] = useState(false);
-  const [voiceMissing, setVoiceMissing] = useState(false);
+  const [browserVoiceMissing, setBrowserVoiceMissing] = useState(false);
 
   const enabledRef = useRef(enabled);
-  const voiceMissingRef = useRef(voiceMissing);
+  const browserVoiceMissingRef = useRef(browserVoiceMissing);
   const unlockedRef = useRef(false);
-  // «Поколение» речи: события отменённых фраз приходят позже и не должны менять состояние
   const generationRef = useRef(0);
   const startTimerRef = useRef<number | undefined>(undefined);
-  // Chrome теряет событие onend, если фразу собрал сборщик мусора, поэтому держим ссылки
   const utterancesRef = useRef<SpeechSynthesisUtterance[]>([]);
+  const requestRef = useRef<AbortController | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const objectUrlRef = useRef<string | null>(null);
 
   useEffect(() => {
     enabledRef.current = enabled;
-    voiceMissingRef.current = voiceMissing;
+    browserVoiceMissingRef.current = browserVoiceMissing;
   });
 
-  // Голоса в Chrome подгружаются асинхронно: следим за событием voiceschanged
   useEffect(() => {
-    if (!supported) return;
+    if (!browserSupported) return;
     const synth = window.speechSynthesis;
-    const update = () => setVoiceMissing(hasNoRussianVoice(synth.getVoices()));
+    const update = () => setBrowserVoiceMissing(hasNoRussianVoice(synth.getVoices()));
     update();
     synth.addEventListener?.('voiceschanged', update);
     return () => synth.removeEventListener?.('voiceschanged', update);
-  }, [supported]);
+  }, [browserSupported]);
+
+  const releaseAudio = useCallback(() => {
+    const audio = audioRef.current;
+    audioRef.current = null;
+    if (audio) {
+      audio.onplay = null;
+      audio.onended = null;
+      audio.onerror = null;
+      audio.pause();
+      audio.removeAttribute('src');
+      audio.load();
+    }
+    if (objectUrlRef.current) {
+      URL.revokeObjectURL(objectUrlRef.current);
+      objectUrlRef.current = null;
+    }
+  }, []);
 
   const cancel = useCallback(() => {
-    if (!supported) return;
     generationRef.current += 1;
     window.clearTimeout(startTimerRef.current);
+    requestRef.current?.abort();
+    requestRef.current = null;
+    releaseAudio();
     utterancesRef.current = [];
-    window.speechSynthesis.cancel();
+    if (browserSupported) window.speechSynthesis.cancel();
     setSpeaking(false);
-  }, [supported]);
+  }, [browserSupported, releaseAudio]);
 
-  const speak = useCallback(
-    (text: string) => {
-      if (!supported || !enabledRef.current || voiceMissingRef.current) return;
+  const speakWithBrowser = useCallback(
+    (text: string, generation: number) => {
+      if (!browserSupported || browserVoiceMissingRef.current || !enabledRef.current) return;
       const parts = toSpokenParts(text);
       if (parts.length === 0) return;
 
-      cancel();
-      const generation = generationRef.current;
-      // Короткая пауза после cancel(): в части версий Chrome фраза, начатая в тот же такт, пропадает
+      window.clearTimeout(startTimerRef.current);
       startTimerRef.current = window.setTimeout(() => {
+        if (generationRef.current !== generation || !enabledRef.current) return;
         const synth = window.speechSynthesis;
         const voice = pickRussianVoice(synth.getVoices());
         const utterances = parts.map((part, index) => {
@@ -91,17 +119,77 @@ export function useSpeech() {
         utterances.forEach((utterance) => synth.speak(utterance));
       }, 30);
     },
-    [supported, cancel],
+    [browserSupported],
   );
 
-  /** Первая «тихая» фраза внутри клика открывает речь в Safari и на iOS; повторять не нужно. */
+  const speak = useCallback(
+    (messageId: string | null, text: string) => {
+      if (!supported || !enabledRef.current || !text.trim()) return;
+
+      cancel();
+      const generation = generationRef.current;
+      const fallback = () => {
+        if (generationRef.current !== generation || !enabledRef.current) return;
+        releaseAudio();
+        setSpeaking(false);
+        speakWithBrowser(text, generation);
+      };
+
+      if (!messageId || !audioSupported) {
+        fallback();
+        return;
+      }
+
+      const controller = new AbortController();
+      requestRef.current = controller;
+      void fetchSpeech(messageId, controller.signal)
+        .then((blob) => {
+          if (controller.signal.aborted || generationRef.current !== generation || !enabledRef.current) return;
+          requestRef.current = null;
+          if (blob.size === 0) {
+            fallback();
+            return;
+          }
+
+          const objectUrl = URL.createObjectURL(blob);
+          objectUrlRef.current = objectUrl;
+          const audio = new Audio(objectUrl);
+          audio.preload = 'auto';
+          audioRef.current = audio;
+
+          let fellBack = false;
+          const fail = () => {
+            if (fellBack) return;
+            fellBack = true;
+            fallback();
+          };
+          audio.onplay = () => {
+            if (generationRef.current === generation) setSpeaking(true);
+          };
+          audio.onended = () => {
+            if (generationRef.current !== generation) return;
+            releaseAudio();
+            setSpeaking(false);
+          };
+          audio.onerror = fail;
+          void audio.play().catch(fail);
+        })
+        .catch(() => {
+          if (requestRef.current === controller) requestRef.current = null;
+          if (!controller.signal.aborted) fallback();
+        });
+    },
+    [audioSupported, cancel, releaseAudio, speakWithBrowser, supported],
+  );
+
+  /** Открывает browser fallback в Safari/iOS; server TTS при этом остаётся основным. */
   const unlock = useCallback(() => {
-    if (!supported || !enabledRef.current || unlockedRef.current) return;
+    if (!browserSupported || !enabledRef.current || unlockedRef.current) return;
     unlockedRef.current = true;
     const silent = new SpeechSynthesisUtterance('');
     silent.volume = 0;
     window.speechSynthesis.speak(silent);
-  }, [supported]);
+  }, [browserSupported]);
 
   const setEnabled = useCallback(
     (value: boolean) => {
@@ -112,14 +200,15 @@ export function useSpeech() {
       } catch {
         /* настройка не сохранится, это не критично */
       }
-      if (value) unlock(); // клик по переключателю — как раз действие пользователя
+      if (value) unlock();
       else cancel();
     },
     [unlock, cancel],
   );
 
-  // Уходим со страницы: не продолжаем говорить
   useEffect(() => cancel, [cancel]);
 
+  // Отсутствие системного русского голоса не выключает переключатель: server TTS работает независимо.
+  const voiceMissing = !audioSupported && browserVoiceMissing;
   return { supported, enabled, setEnabled, speaking, voiceMissing, speak, cancel, unlock };
 }

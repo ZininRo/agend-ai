@@ -17,6 +17,8 @@ public enum ErrorCode {
     AUDIO_FORMAT_UNSUPPORTED(415, "Не удалось прочитать запись с этого устройства. Введите сообщение текстом.", false, Fallback.TEXT_INPUT),
     STT_TIMEOUT(504, "Распознавание речи заняло слишком много времени. Попробуйте ещё раз или введите сообщение текстом.", true, Fallback.RETRY),
     STT_UNAVAILABLE(503, "Распознавание речи временно недоступно. Введите сообщение текстом.", false, Fallback.TEXT_INPUT),
+    TTS_TIMEOUT(504, "Озвучивание ответа заняло слишком много времени.", true, Fallback.RETRY),
+    TTS_UNAVAILABLE(503, "Озвучивание ответа временно недоступно.", true, Fallback.RETRY),
     LLM_TIMEOUT(504, "Ассистент отвечает слишком долго. Попробуйте отправить сообщение ещё раз.", true, Fallback.RETRY),
     LLM_UNAVAILABLE(503, "Ассистент временно недоступен. Попробуйте через минуту.", true, Fallback.WAIT),
     STORAGE_UNAVAILABLE(503, "Не удалось сохранить данные. Ничего не изменилось, попробуйте ещё раз через минуту.", true, Fallback.WAIT),

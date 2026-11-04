@@ -41,6 +41,14 @@ services:
       LLM_BASE_URL: ${LLM_BASE_URL:-https://llm.api.cloud.yandex.net}
       STT_PROVIDER: ${STT_PROVIDER:-speechkit}
       STT_API_KEY: ${STT_API_KEY:-}
+      TTS_PROVIDER: ${TTS_PROVIDER:-speechkit}
+      TTS_API_KEY: ${TTS_API_KEY:-}
+      TTS_BASE_URL: ${TTS_BASE_URL:-https://tts.api.cloud.yandex.net}
+      TTS_TIMEOUT_SEC: ${TTS_TIMEOUT_SEC:-12}
+      TTS_VOICE: ${TTS_VOICE:-jane}
+      TTS_EMOTION: ${TTS_EMOTION:-}
+      TTS_SPEED: ${TTS_SPEED:-1.0}
+      TTS_MAX_CHARS: ${TTS_MAX_CHARS:-400}
       LLM_TIMEOUT_SEC: ${LLM_TIMEOUT_SEC:-15}
       LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-1000}
       PUSH_PUBLIC_KEY: ${PUSH_PUBLIC_KEY:-}

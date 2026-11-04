@@ -5,6 +5,7 @@ import com.example.agend_ai.api.error.ErrorCode;
 import com.example.agend_ai.auth.dto.AuthUserDto;
 import com.example.agend_ai.auth.dto.LoginRequest;
 import com.example.agend_ai.auth.dto.RegisterRequest;
+import com.example.agend_ai.auth.dto.UpdatePreferencesRequest;
 import com.example.agend_ai.config.AuthProperties;
 import com.example.agend_ai.entity.AuthSession;
 import com.example.agend_ai.entity.User;
@@ -13,6 +14,7 @@ import com.example.agend_ai.repository.AuthSessionRepository;
 import com.example.agend_ai.repository.UserIdentityRepository;
 import com.example.agend_ai.repository.UserRepository;
 import com.example.agend_ai.security.CurrentUser;
+import com.example.agend_ai.service.tts.TtsVoiceCatalog;
 import java.security.SecureRandom;
 import java.time.Clock;
 import java.time.Duration;
@@ -41,6 +43,7 @@ public class AuthService {
   private final JwtService jwt;
   private final AuthProperties properties;
   private final CurrentUser currentUser;
+  private final TtsVoiceCatalog ttsVoices;
   private final Clock clock;
 
   @Transactional
@@ -52,6 +55,7 @@ public class AuthService {
     User user = new User();
     user.setDisplayName(normalizeDisplayName(request.displayName(), email));
     user.setTimezone(normalizeTimezone(request.timezone()));
+    user.setTtsVoice(ttsVoices.defaultVoice());
     users.save(user);
 
     UserIdentity identity = new UserIdentity();
@@ -140,7 +144,16 @@ public class AuthService {
   @Transactional(readOnly = true)
   public AuthUserDto me() {
     User user = users.findById(currentUser.id()).orElseThrow(() -> new AppException(ErrorCode.AUTH_REQUIRED));
-    return AuthUserDto.from(user, localEmail(user.getId()));
+    return toDto(user, localEmail(user.getId()));
+  }
+
+  @Transactional
+  public AuthUserDto updatePreferences(UpdatePreferencesRequest request) {
+    User user =
+        users.findById(currentUser.id())
+            .orElseThrow(() -> new AppException(ErrorCode.AUTH_REQUIRED));
+    user.setTtsVoice(ttsVoices.requireSupported(request.ttsVoice()));
+    return toDto(user, localEmail(user.getId()));
   }
 
   private AuthTokens issueSession(User user, String email, UUID familyId) {
@@ -155,7 +168,11 @@ public class AuthService {
 
     JwtService.IssuedAccessToken access = jwt.issue(user);
     return new AuthTokens(
-        access.value(), access.expiresInSeconds(), refresh, AuthUserDto.from(user, email));
+        access.value(), access.expiresInSeconds(), refresh, toDto(user, email));
+  }
+
+  private AuthUserDto toDto(User user, String email) {
+    return AuthUserDto.from(user, email, ttsVoices.resolve(user.getTtsVoice()));
   }
 
   private String localEmail(UUID userId) {

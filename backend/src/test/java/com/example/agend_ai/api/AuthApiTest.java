@@ -2,6 +2,7 @@ package com.example.agend_ai.api;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -69,7 +70,24 @@ class AuthApiTest extends DatabaseTestSupport {
     mvc.perform(get("/api/auth/me").header(HttpHeaders.AUTHORIZATION, "Bearer " + firstAccessToken))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.email").value(email))
-        .andExpect(jsonPath("$.display_name").value("P1 User"));
+        .andExpect(jsonPath("$.display_name").value("P1 User"))
+        .andExpect(jsonPath("$.tts_voice").value("jane"));
+
+    mvc.perform(
+            patch("/api/auth/me")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + firstAccessToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(mapper.writeValueAsBytes(Map.of("tts_voice", "zahar"))))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.tts_voice").value("zahar"));
+
+    mvc.perform(
+            patch("/api/auth/me")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + firstAccessToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(mapper.writeValueAsBytes(Map.of("tts_voice", "unknown"))))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.error.code").value("REQUEST_INVALID"));
 
     mvc.perform(
             post("/api/auth/register")

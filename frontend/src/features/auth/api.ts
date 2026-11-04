@@ -31,6 +31,13 @@ export async function register(email: string, password: string, displayName: str
   return result.user;
 }
 
+export async function updateTtsVoice(ttsVoice: string): Promise<AuthUserDto> {
+  return request<AuthUserDto>('/api/auth/me', {
+    method: 'PATCH',
+    json: { tts_voice: ttsVoice },
+  });
+}
+
 export async function logout(): Promise<void> {
   try {
     // A browser push subscription identifies the device, not the account. Remove it while the

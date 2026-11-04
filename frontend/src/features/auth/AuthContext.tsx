@@ -10,6 +10,7 @@ type AuthContextValue = {
   user: AuthUserDto | null;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, displayName: string) => Promise<void>;
+  setTtsVoice: (voice: string) => Promise<void>;
   logout: () => Promise<void>;
 };
 
@@ -54,6 +55,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const nextUser = await authApi.register(email, password, displayName);
         setUser(nextUser);
         setStatus('authenticated');
+      },
+      setTtsVoice: async (voice) => {
+        const nextUser = await authApi.updateTtsVoice(voice);
+        setUser(nextUser);
       },
       logout: async () => {
         try {

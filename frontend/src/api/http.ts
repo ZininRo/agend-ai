@@ -131,7 +131,7 @@ export async function request<T>(path: string, options: Options = {}): Promise<T
   });
 }
 
-/** Авторизованная загрузка бинарного ответа (CSV/ICS). */
+/** Авторизованная загрузка бинарного ответа (CSV/ICS/аудио). */
 export async function requestBlob(path: string, options: Options = {}): Promise<Blob> {
   return withResponse(path, options, (response) => response.blob());
 }

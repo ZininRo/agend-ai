@@ -1,5 +1,5 @@
 import { ApiError } from '../../api/ApiError';
-import { request } from '../../api/http';
+import { request, requestBlob } from '../../api/http';
 import { getSessionId, getTimezone } from '../../api/session';
 import type { HistoryResponseDto, MessageResponseDto, VoiceResponseDto } from '../../api/types';
 import type { AssistantReply, Message, Recording, SendRequest, Transcription } from './types';
@@ -7,9 +7,20 @@ import type { AssistantReply, Message, Recording, SendRequest, Transcription } f
 // Запросы чата к настоящему бэкенду:
 //   transcribeAudio → POST /api/voice   (multipart: audio + session_id)
 //   sendMessage     → POST /api/message ({ session_id, text, timezone, source, client_message_id })
+//   fetchSpeech     → GET  /api/messages/{message_id}/speech (audio/ogg)
 
 const VOICE_TIMEOUT_MS = 30_000; // распознавание (до 10 с у провайдера + конвертация)
 const MESSAGE_TIMEOUT_MS = 40_000; // LLM до 15 с, плюс одна повторная попытка на невалидный JSON
+
+const SPEECH_TIMEOUT_MS = 20_000;
+
+/** Серверная озвучка конкретного сообщения ассистента. */
+export async function fetchSpeech(messageId: string, signal?: AbortSignal): Promise<Blob> {
+  return requestBlob(`/api/messages/${encodeURIComponent(messageId)}/speech`, {
+    timeoutMs: SPEECH_TIMEOUT_MS,
+    signal,
+  });
+}
 
 /** Распознавание речи. */
 export async function transcribeAudio(recording: Recording): Promise<Transcription> {
