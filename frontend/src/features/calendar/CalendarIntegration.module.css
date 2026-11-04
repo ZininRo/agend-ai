@@ -1,0 +1,69 @@
+.wrapper { position: relative; width: 100%; min-width: 0; margin-bottom: 6px; }
+.trigger { display: flex; align-items: center; gap: 14px; width: 100%; min-height: 50px; padding: 0 12px 0 10px; border: 0; border-radius: 8px; background: transparent; color: var(--color-text); font: inherit; font-size: 16px; text-align: left; cursor: pointer; transition: background-color 150ms ease; }
+.trigger:hover { background: rgba(255,255,255,.05); }
+.trigger:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
+.icon { display: flex; align-items: center; justify-content: center; flex: 0 0 24px; width: 24px; height: 24px; color: var(--color-text-subtle); }
+.icon svg { width: 24px; height: 24px; }
+.connected .icon { color: #73d9a5; }
+.triggerText { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.dot { flex: 0 0 8px; width: 8px; height: 8px; border-radius: 50%; background: #5b5862; box-shadow: 0 0 0 3px rgba(255,255,255,.03); }
+.dotOn { background: #49cc8a; box-shadow: 0 0 0 3px rgba(73,204,138,.12); }
+.collapsed .trigger { justify-content: center; padding: 0; }
+.panel { position: absolute; left: 0; bottom: calc(100% + 8px); z-index: 80; width: min(430px, calc(100vw - 28px)); max-height: min(72vh, 720px); overflow-y: auto; box-sizing: border-box; padding: 18px; border: 1px solid rgba(183,134,255,.20); border-radius: 16px; background: #211e24; box-shadow: 0 22px 60px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.02) inset; color: var(--color-text); scrollbar-width: thin; }
+.panelCollapsed { left: 0; width: min(430px, calc(100vw - 116px)); }
+.header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.header h3 { margin: 2px 0 0; font-size: 19px; line-height: 1.2; }
+.eyebrow { color: #b997f2; font-size: 11px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
+.statusPill { flex-shrink: 0; padding: 5px 8px; border: 1px solid rgba(255,255,255,.10); border-radius: 999px; color: var(--color-text-subtle); background: rgba(255,255,255,.035); font-size: 11px; }
+.statusOn { color: #86e4b5; border-color: rgba(73,204,138,.25); background: rgba(73,204,138,.08); }
+.notice { margin: 0 0 12px; padding: 9px 10px; border-radius: 9px; font-size: 12px; line-height: 1.45; }
+.success { color: #a5ecc8; background: rgba(73,204,138,.10); border: 1px solid rgba(73,204,138,.18); }
+.error { color: #ffb0b0; background: rgba(255,108,120,.10); border: 1px solid rgba(255,108,120,.18); }
+.skeleton, .emptyState, .connectBlock { padding: 12px; border: 1px solid var(--color-border); border-radius: 12px; background: rgba(255,255,255,.025); }
+.skeleton { color: var(--color-text-subtle); font-size: 13px; }
+.emptyState p, .connectBlock p { margin: 0; color: var(--color-text-subtle); font-size: 13px; line-height: 1.55; }
+.emptyState span { display: block; margin-top: 8px; color: var(--color-text-muted); font-size: 11px; }
+.emptyState code { color: #d7baff; }
+.reauth { margin-top: 10px !important; color: #ffb0b0 !important; }
+.primaryButton, .syncButton { border: 0; border-radius: 9px; background: linear-gradient(115deg, #a35aff, #7355f5 55%, #4e86ef); color: white; font: inherit; font-weight: 650; cursor: pointer; }
+.primaryButton { width: 100%; margin-top: 14px; padding: 10px 12px; }
+.syncButton { padding: 8px 10px; font-size: 12px; }
+.primaryButton:hover:not(:disabled), .syncButton:hover:not(:disabled) { filter: brightness(1.12); }
+.primaryButton:disabled, .syncButton:disabled { opacity: .55; cursor: wait; }
+.syncSummary { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; padding: 11px 12px; border: 1px solid rgba(73,204,138,.12); border-radius: 12px; background: rgba(73,204,138,.045); }
+.syncSummary div { min-width: 0; }
+.syncSummary span, .syncSummary strong { display: block; }
+.syncSummary span { color: var(--color-text-muted); font-size: 10px; text-transform: uppercase; letter-spacing: .05em; }
+.syncSummary strong { margin-top: 3px; font-size: 12px; font-weight: 600; }
+.listHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+.listHeader strong, .listHeader span { display: block; }
+.listHeader strong { font-size: 13px; }
+.listHeader span { margin-top: 3px; color: var(--color-text-muted); font-size: 11px; line-height: 1.35; }
+.listHeader button { border: 0; background: transparent; color: #c9a8ff; font: inherit; font-size: 11px; cursor: pointer; padding: 2px 0; }
+.listHeader button:disabled { opacity: .45; cursor: wait; }
+.calendarList { display: flex; flex-direction: column; gap: 7px; }
+.calendarRow { padding: 10px; border: 1px solid var(--color-border); border-radius: 11px; background: rgba(255,255,255,.022); transition: border-color 150ms ease, background-color 150ms ease; }
+.calendarActive { border-color: rgba(166,106,255,.18); background: rgba(166,106,255,.045); }
+.calendarMain { position: relative; display: flex; align-items: center; gap: 10px; cursor: pointer; }
+.calendarMain input { position: absolute; opacity: 0; pointer-events: none; }
+.checkmark { flex: 0 0 18px; width: 18px; height: 18px; box-sizing: border-box; border: 1px solid #64606c; border-radius: 5px; background: #2b282f; }
+.calendarMain input:checked + .checkmark { border-color: #9c69f8; background: #8654e7; box-shadow: inset 0 0 0 4px #8654e7; }
+.calendarMain input:checked + .checkmark::after { content: '✓'; display: block; color: white; font-size: 12px; line-height: 16px; text-align: center; }
+.calendarMain input:focus-visible + .checkmark { outline: 2px solid #c5a4ff; outline-offset: 2px; }
+.calendarText { min-width: 0; }
+.calendarText strong, .calendarText small { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.calendarText strong { font-size: 12px; font-weight: 600; }
+.calendarText small { margin-top: 2px; color: var(--color-text-muted); font-size: 10px; }
+.targetButton { margin: 8px 0 0 28px; padding: 5px 8px; border: 1px solid rgba(255,255,255,.09); border-radius: 7px; background: rgba(255,255,255,.035); color: var(--color-text-subtle); font: inherit; font-size: 10px; cursor: pointer; }
+.targetButton:hover:not(:disabled) { border-color: rgba(166,106,255,.4); color: #d6bcff; }
+.targetActive { border-color: rgba(73,204,138,.25); color: #8ee7bc; background: rgba(73,204,138,.07); }
+.targetButton:disabled { opacity: .38; cursor: default; }
+.noCalendars { margin: 0; padding: 12px; color: var(--color-text-muted); font-size: 12px; text-align: center; }
+.providerError { margin: 10px 0 0; color: #ffaaa9; font-size: 10px; line-height: 1.4; overflow-wrap: anywhere; }
+.actions { display: flex; justify-content: flex-end; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--color-border); }
+.disconnectButton { border: 0; background: transparent; color: #ff8e98; font: inherit; font-size: 11px; cursor: pointer; }
+.disconnectButton:hover:not(:disabled) { color: #ffb0b7; }
+.disconnectButton:disabled { opacity: .5; cursor: wait; }
+.panel button:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+@media (max-width: 600px) { .panel, .panelCollapsed { position: fixed; left: 14px; right: 14px; bottom: 14px; width: auto; max-height: min(78vh, 720px); } }
+@media (prefers-reduced-motion: reduce) { .trigger, .calendarRow { transition: none; } }

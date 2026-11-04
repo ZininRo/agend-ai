@@ -9,7 +9,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.Locale;
 import java.util.UUID;
 
-/** Схема Item из разд. 6.7. Даты — ISO-8601 со смещением пояса пользователя. */
+/** Схема Item. Даты — ISO-8601 со смещением пояса пользователя. */
 public record ItemDto(
         UUID id,
         String type,
@@ -20,6 +20,8 @@ public record ItemDto(
         String dueAt,
         String place,
         String status,
+        String source,
+        boolean allDay,
         String createdAt,
         String updatedAt) {
 
@@ -34,6 +36,8 @@ public record ItemDto(
                 format(i.getDueAt(), zone),
                 i.getPlace(),
                 i.getStatus().name().toLowerCase(Locale.ROOT),
+                i.getSource().name().toLowerCase(Locale.ROOT),
+                i.isAllDay(),
                 format(i.getCreatedAt(), zone),
                 format(i.getUpdatedAt(), zone));
     }

@@ -2,6 +2,7 @@ package com.example.agend_ai.service;
 
 import com.example.agend_ai.api.dto.*;
 import com.example.agend_ai.api.error.*;
+import com.example.agend_ai.calendar.CalendarOutboxService;
 import com.example.agend_ai.config.LimitsProperties;
 import com.example.agend_ai.entity.*;
 import com.example.agend_ai.entity.enums.*;
@@ -35,6 +36,7 @@ public class IntentDispatcher {
   private final CurrentUser currentUser;
   private final ClarificationService clarifications;
   private final TargetResolver targets;
+  private final CalendarOutboxService calendarOutbox;
   // Относительное смещение существующей записи, а не время от текущего момента.
   private static final Pattern TIME_SHIFT = Pattern.compile(
       "(?iu)(?:на\\s+)?(\\d{1,5})\\s*(минут(?:у|ы)?|мин|час(?:а|ов)?|ч)\\s*(позже|раньше|впер[её]д|назад)");
@@ -462,6 +464,7 @@ public class IntentDispatcher {
       if (conflict.isPresent()) return conflictClarification(session, request, payload, conflict.get(), zone);
     }
     items.saveAndFlush(item);
+    calendarOutbox.enqueue(item);
     session.setLastItem(item);
     session.setPendingClarification(null);
     return finish(
@@ -741,6 +744,7 @@ public class IntentDispatcher {
       }
       item.setStatus(status);
       items.saveAndFlush(item);
+      calendarOutbox.enqueue(item);
       session.setLastItem(item);
       session.setPendingClarification(null);
       String label = switch (status) {
@@ -755,6 +759,7 @@ public class IntentDispatcher {
     if (newTitle != null) {
       item.setTitle(normalizeTitle(newTitle, item.getType()));
       items.saveAndFlush(item);
+      calendarOutbox.enqueue(item);
       session.setLastItem(item);
       session.setPendingClarification(null);
       return finish(session, request, "done", "update_item", composer.renamed(item), List.of(item), true, payload);
@@ -811,6 +816,7 @@ public class IntentDispatcher {
       }
     }
     items.saveAndFlush(item);
+    calendarOutbox.enqueue(item);
     session.setLastItem(item);
     session.setPendingClarification(null);
     return finish(session, request, "done", "update_item", composer.updated(item, zone), List.of(item), true, payload);
@@ -839,6 +845,7 @@ public class IntentDispatcher {
     Item item = target.item();
     item.softDelete();
     items.saveAndFlush(item);
+    calendarOutbox.enqueue(item);
     if (session.getLastItem() != null && session.getLastItem().getId().equals(item.getId())) session.setLastItem(null);
     session.setPendingClarification(null);
     return finish(session, request, "done", "delete_item", composer.deleted(item), List.of(), true, payload);
@@ -872,6 +879,7 @@ public class IntentDispatcher {
     Item item = target.item();
     item.setStatus(ItemStatus.DONE);
     items.saveAndFlush(item);
+    calendarOutbox.enqueue(item);
     session.setLastItem(item);
     session.setPendingClarification(null);
     return finish(session, request, "done", "complete_item", composer.completed(item), List.of(item), true, payload);

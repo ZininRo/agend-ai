@@ -6,6 +6,8 @@ export type RecordItem = {
   title: string;
   description?: string;
   status: ItemStatus;
+  source: 'local' | 'google_calendar';
+  allDay: boolean;
   date: string;
   startTime?: string;
   endTime?: string;

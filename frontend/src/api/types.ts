@@ -15,6 +15,8 @@ export type ItemDto = {
   due_at: string | null;
   place: string | null;
   status: ItemStatus;
+  source: 'local' | 'google_calendar';
+  all_day: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -85,4 +87,36 @@ export type AuthResponseDto = {
   token_type: 'Bearer';
   expires_in: number;
   user: AuthUserDto;
+};
+
+export type ExternalCalendarDto = {
+  id: string;
+  name: string;
+  timezone: string | null;
+  access_role: string | null;
+  primary: boolean;
+  writable: boolean;
+  sync_enabled: boolean;
+  write_target: boolean;
+  last_sync_at: string | null;
+};
+
+export type CalendarStatusDto = {
+  configured: boolean;
+  connected: boolean;
+  provider: 'GOOGLE';
+  status: 'CONNECTED' | 'REAUTH_REQUIRED' | 'ERROR' | 'DISCONNECTED' | string;
+  last_sync_at: string | null;
+  last_error: string | null;
+  calendars: ExternalCalendarDto[];
+};
+
+export type CalendarConnectResponseDto = {
+  authorization_url: string;
+};
+
+export type CalendarSyncResponseDto = {
+  calendars_synced: number;
+  events_applied: number;
+  outbound_processed: number;
 };

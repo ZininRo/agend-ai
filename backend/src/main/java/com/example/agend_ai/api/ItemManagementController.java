@@ -1,5 +1,6 @@
 package com.example.agend_ai.api;
 
+import com.example.agend_ai.calendar.CalendarOutboxService;
 import com.example.agend_ai.api.dto.ItemDto;
 import com.example.agend_ai.api.error.AppException;
 import com.example.agend_ai.api.error.ErrorCode;
@@ -28,6 +29,7 @@ public class ItemManagementController {
     private final ZoneResolver zones;
     private final JdbcTemplate jdbc;
     private final CurrentUser currentUser;
+    private final CalendarOutboxService calendarOutbox;
 
     public record StatusUpdate(String status) {}
 
@@ -51,6 +53,7 @@ public class ItemManagementController {
         ItemStatus previous = item.getStatus();
         item.setStatus(status);
         repository.saveAndFlush(item);
+        calendarOutbox.enqueue(item);
         if (previous != status) resetPush(item.getId());
         return ItemDto.from(item, zones.resolve(timezone));
     }
@@ -87,6 +90,7 @@ public class ItemManagementController {
             throw new AppException(ErrorCode.REQUEST_INVALID);
         }
         repository.saveAndFlush(item);
+        calendarOutbox.enqueue(item);
         if (previousStatus != item.getStatus() || !java.util.Objects.equals(previousStart, item.getStartAt()))
             resetPush(item.getId());
         return ItemDto.from(item, zones.resolve(timezone));
@@ -104,6 +108,7 @@ public class ItemManagementController {
         Item item = find(id);
         item.softDelete();
         repository.save(item);
+        calendarOutbox.enqueue(item);
         resetPush(item.getId());
     }
 

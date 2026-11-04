@@ -19,6 +19,7 @@ import { RecordsSection } from './RecordsSection';
 import { RecordsStatus } from './RecordStatus';
 import { UserMenu } from './UserMenu';
 import { PushToggle } from '../../../features/push/PushToggle';
+import { CalendarIntegration } from '../../../features/calendar/CalendarIntegration';
 import styles from './Sidebar.module.css';
 
 // Разделы «Мои записи»: порядок и подписи как в макете.
@@ -133,6 +134,7 @@ export function Sidebar({ collapsed, onToggleCollapsed }: Props) {
       </nav>
 
       <footer className={styles.footer}>
+        <CalendarIntegration collapsed={collapsed} />
         <PushToggle collapsed={collapsed} />
         <UserMenu collapsed={collapsed} />
       </footer>

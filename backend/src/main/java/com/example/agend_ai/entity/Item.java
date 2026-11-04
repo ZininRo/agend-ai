@@ -2,6 +2,7 @@ package com.example.agend_ai.entity;
 
 import com.example.agend_ai.entity.enums.ItemStatus;
 import com.example.agend_ai.entity.enums.ItemType;
+import com.example.agend_ai.entity.enums.ItemSource;
 import jakarta.persistence.*;
 import com.example.agend_ai.crypto.EncryptedStringConverter;
 import lombok.Getter;
@@ -58,6 +59,13 @@ public class Item extends BaseEntity {
     @Column(name = "place", columnDefinition = "TEXT")
     @Convert(converter = EncryptedStringConverter.class)
     private String place;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "source", nullable = false, length = 32)
+    private ItemSource source = ItemSource.LOCAL;
+
+    @Column(name = "all_day", nullable = false)
+    private boolean allDay = false;
 
     @Column(name = "deleted_at")
     private Instant deletedAt;

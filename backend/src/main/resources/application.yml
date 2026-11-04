@@ -91,3 +91,23 @@ push:
   private-key: ${PUSH_PRIVATE_KEY:}
   subject: ${PUSH_SUBJECT:mailto:admin@example.com}
   scan-delay-ms: ${PUSH_SCAN_DELAY_MS:15000}
+# Google Calendar OAuth + two-way synchronization (P4).
+calendar:
+  google:
+    client-id: ${GOOGLE_CALENDAR_CLIENT_ID:}
+    client-secret: ${GOOGLE_CALENDAR_CLIENT_SECRET:}
+    redirect-uri: ${GOOGLE_CALENDAR_REDIRECT_URI:http://localhost:5173/api/calendar/google/callback}
+    frontend-return-url: ${GOOGLE_CALENDAR_FRONTEND_RETURN_URL:http://localhost:5173/}
+    authorization-url: ${GOOGLE_CALENDAR_AUTHORIZATION_URL:https://accounts.google.com/o/oauth2/v2/auth}
+    token-url: ${GOOGLE_CALENDAR_TOKEN_URL:https://oauth2.googleapis.com/token}
+    revoke-url: ${GOOGLE_CALENDAR_REVOKE_URL:https://oauth2.googleapis.com/revoke}
+    api-base-url: ${GOOGLE_CALENDAR_API_BASE_URL:https://www.googleapis.com/calendar/v3}
+    webhook-base-url: ${GOOGLE_CALENDAR_WEBHOOK_BASE_URL:}
+    timeout-sec: ${GOOGLE_CALENDAR_TIMEOUT_SEC:10}
+    oauth-state-minutes: ${GOOGLE_CALENDAR_OAUTH_STATE_MINUTES:10}
+    poll-delay-ms: ${GOOGLE_CALENDAR_POLL_DELAY_MS:60000}
+    outbox-delay-ms: ${GOOGLE_CALENDAR_OUTBOX_DELAY_MS:3000}
+    initial-past-days: ${GOOGLE_CALENDAR_INITIAL_PAST_DAYS:90}
+    initial-future-days: ${GOOGLE_CALENDAR_INITIAL_FUTURE_DAYS:365}
+    full-sync-every-hours: ${GOOGLE_CALENDAR_FULL_SYNC_EVERY_HOURS:24}
+    watch-ttl-seconds: ${GOOGLE_CALENDAR_WATCH_TTL_SECONDS:604800}

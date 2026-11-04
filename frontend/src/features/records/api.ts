@@ -33,7 +33,7 @@ export function toRecordItem(dto: ItemDto): RecordItem | null {
   const dateValue = main ?? dto.created_at;
   if (!dateValue) return null;
 
-  const item: RecordItem = { id: dto.id, kind, title: dto.title, description: dto.description ?? undefined, status: dto.status, date: dateValue.slice(0, 10), createdAt: dto.created_at, updatedAt: dto.updated_at, startAt: dto.start_at, endAt: dto.end_at, dueAt: dto.due_at };
+  const item: RecordItem = { id: dto.id, kind, title: dto.title, description: dto.description ?? undefined, status: dto.status, source: dto.source ?? 'local', allDay: dto.all_day ?? false, date: dateValue.slice(0, 10), createdAt: dto.created_at, updatedAt: dto.updated_at, startAt: dto.start_at, endAt: dto.end_at, dueAt: dto.due_at };
   if (kind !== 'task') {
     if (main) item.startTime = main.slice(11, 16);
     if (dto.end_at) item.endTime = dto.end_at.slice(11, 16);

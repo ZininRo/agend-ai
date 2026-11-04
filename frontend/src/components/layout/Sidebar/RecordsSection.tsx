@@ -39,8 +39,9 @@ function RecordRow({ item }: { item: RecordItem }) {
       <span className={styles.recordHeading}>
         <span className={`${styles.dot} ${styles[item.status]}`} title={statusLabel(item.status)} />
         <span className={styles.title}>{item.title}</span>
+        {item.source === 'google_calendar' && <span className={styles.sourceBadge}>Google</span>}
       </span>
-      <span className={styles.meta}>{isTask ? formatDayMonth(item.date) : `${formatDayMonth(item.date)}${item.startTime ? ` · ${formatTimeRange(item)}` : ''}`}</span>
+      <span className={styles.meta}>{item.allDay ? `${formatDayMonth(item.date)} · весь день` : isTask ? formatDayMonth(item.date) : `${formatDayMonth(item.date)}${item.startTime ? ` · ${formatTimeRange(item)}` : ''}`}</span>
     </button>
     {open && <RecordDialog item={item} onClose={() => setOpen(false)} />}
   </li>;
@@ -107,10 +108,11 @@ function RecordDialog({ item, onClose }: { item: RecordItem; onClose: () => void
         <label>Статус<select className={`${styles.statusField} ${styles[status]}`} value={status} onChange={e => setStatus(e.target.value as ItemStatus)} disabled={busy}>
           {STATUSES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
         </select></label>
-        {item.kind === 'task' ? <label>Срок выполнения<input type="datetime-local" value={dueAt} onChange={e => setDueAt(e.target.value)} disabled={busy} required /></label> : <label>Начало<input type="datetime-local" value={startAt} onChange={e => setStartAt(e.target.value)} disabled={busy} required /></label>}
-        {item.kind === 'meeting' && <label>Окончание<input type="datetime-local" value={endAt} onChange={e => setEndAt(e.target.value)} disabled={busy} /></label>}
+        {item.allDay ? <p className={styles.allDayInfo}>Событие на весь день: <strong>{formatDayMonth(item.date)}</strong>. Дату такого события изменяй в Google Calendar.</p> : item.kind === 'task' ? <label>Срок выполнения<input type="datetime-local" value={dueAt} onChange={e => setDueAt(e.target.value)} disabled={busy} required /></label> : <label>Начало<input type="datetime-local" value={startAt} onChange={e => setStartAt(e.target.value)} disabled={busy} required /></label>}
+        {item.kind === 'meeting' && !item.allDay && <label>Окончание<input type="datetime-local" value={endAt} onChange={e => setEndAt(e.target.value)} disabled={busy} /></label>}
         {item.kind === 'meeting' && <label>Место<input value={place} maxLength={255} onChange={e => setPlace(e.target.value)} disabled={busy} /></label>}
         <p className={styles.readonly}>Тип: {item.kind === 'task' ? 'Задача' : item.kind === 'meeting' ? 'Встреча' : 'Напоминание'}</p>
+        <p className={styles.readonly}>Источник: {item.source === 'google_calendar' ? 'Google Calendar' : 'AgendAI'}</p>
         {item.createdAt && <p className={styles.readonly}>Создано: {new Date(item.createdAt).toLocaleString('ru-RU')}</p>}
         {item.updatedAt && <p className={styles.readonly}>Изменено: {new Date(item.updatedAt).toLocaleString('ru-RU')}</p>}
         {error && <p role="alert" className={styles.error}>{error}</p>}
